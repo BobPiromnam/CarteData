@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Map generator</title>
+  <link rel="stylesheet" href="style.css" />
+  <link id="themeStylesheet" rel="stylesheet" href="themes/goc-green.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="app-ribbon" aria-label="Application actions">
+      <div class="app-brand" aria-label="Application identity">
+        <svg class="app-logo" aria-hidden="true" viewBox="0 0 64 64" fill="none">
+          <rect class="logo-tile logo-tile-left" x="7" y="13" width="20" height="38" rx="4" />
+          <rect class="logo-tile logo-tile-mid" x="22" y="9" width="20" height="42" rx="4" />
+          <rect class="logo-tile logo-tile-right" x="37" y="15" width="20" height="36" rx="4" />
+          <path class="logo-line" d="M17 41 C25 28 37 35 47 21" />
+          <circle class="logo-point" cx="47" cy="21" r="5" />
+          <path class="logo-label" d="M28 38 H52" />
+          <path class="logo-label" d="M32 44 H49" />
+        </svg>
+        <div>
+          <h1>Map generator</h1>
+          <p>CSV to static map</p>
+        </div>
+      </div>
+      <div class="ribbon-group" aria-label="Project file actions">
+        <div class="ribbon-actions">
+          <button id="ribbonOpenProjectBtn" class="ribbon-button" type="button" data-icon="folder-open">Open project</button>
+          <button id="ribbonSaveProjectBtn" class="ribbon-button" type="button" data-icon="save">Save project</button>
+        </div>
+        <div class="ribbon-label">Project</div>
+      </div>
+      <div class="ribbon-group" aria-label="Project data actions">
+        <div class="ribbon-actions">
+          <button id="ribbonLoadSampleBtn" class="ribbon-button" type="button" data-icon="table">Load sample</button>
+          <button id="ribbonImportCsvBtn" class="ribbon-button" type="button" data-icon="upload">Import CSV</button>
+          <button id="ribbonExportCsvBtn" class="ribbon-button" type="button" data-icon="download">Export CSV</button>
+        </div>
+        <div class="ribbon-label">Data</div>
+      </div>
+      <div class="ribbon-group" aria-label="Layout actions">
+        <div class="ribbon-actions">
+          <button id="ribbonAutoPlaceBtn" class="ribbon-button" type="button" data-icon="wand">Auto-place labels</button>
+        </div>
+        <div class="ribbon-label">Layout</div>
+      </div>
+      <div class="ribbon-group" aria-label="Map export actions">
+        <div class="ribbon-actions">
+          <button id="ribbonExportSvgBtn" class="ribbon-button" type="button" data-icon="svg-file">Export SVG</button>
+          <button id="ribbonExportPngBtn" class="ribbon-button" type="button" data-icon="image">Export PNG</button>
+        </div>
+        <div class="ribbon-label">Export</div>
+      </div>
+      <div class="ribbon-group ribbon-appearance" aria-label="Map appearance actions">
+        <div class="ribbon-actions ribbon-field-actions">
+          <label class="ribbon-field">
+            <span>Map style</span>
+            <select id="mapStylePresetInput">
+              <option value="goc-green">GoC green</option>
+            </select>
+          </label>
+          <button id="resetRegionColoursBtn" class="ribbon-button" type="button">Reset colours</button>
+        </div>
+        <div class="ribbon-label">Appearance</div>
+      </div>
+    </div>
+  </header>
+
+  <main class="app-shell">
+    <aside class="sidebar" aria-label="Map controls">
+      <details class="panel workflow-panel" open>
+        <summary class="workflow-summary">
+          <span class="workflow-step">1</span>
+          <span class="workflow-heading">
+            <span class="workflow-title">Map area</span>
+            <span class="workflow-subtitle">Choose regions first</span>
+          </span>
+        </summary>
+        <div class="workflow-body">
+        <p class="hint">Choose which provinces and territories are included before placing project points.</p>
+        <div class="control-group">
+          <div class="control-group-title">Selection</div>
+          <div class="button-row button-row-equal">
+            <button id="selectAllRegionsBtn" type="button">Select all</button>
+            <button id="clearRegionsBtn" type="button">Clear</button>
+          </div>
+          <button id="selectProjectRegionsBtn" type="button" class="wide-button">Select project regions</button>
+          <label>
+            Region preset
+            <select id="regionPresetInput">
+              <option value="">Choose preset</option>
+              <option value="all">All Canada</option>
+              <option value="territories">Territories</option>
+              <option value="western">Western Canada</option>
+              <option value="prairies">Prairies</option>
+              <option value="central">Central Canada</option>
+              <option value="atlantic">Atlantic Canada</option>
+            </select>
+          </label>
+        </div>
+        <div id="regionSummary" class="mini-status"></div>
+        <div id="regionList" class="region-list">Map boundary must load before regions can be edited.</div>
+        </div>
+      </details>
+
+      <details class="panel workflow-panel" open>
+        <summary class="workflow-summary">
+          <span class="workflow-step">2</span>
+          <span class="workflow-heading">
+            <span class="workflow-title">Legend and markers</span>
+            <span class="workflow-subtitle">Define categories</span>
+          </span>
+        </summary>
+        <div class="workflow-body">
+        <p class="hint">Set the categories, marker shapes and colours before importing or editing rows.</p>
+        <div id="categoryList"></div>
+        <button id="addCategoryBtn" type="button">Add legend marker</button>
+        </div>
+      </details>
+
+      <details class="panel workflow-panel" open>
+        <summary class="workflow-summary">
+          <span class="workflow-step">3</span>
+          <span class="workflow-heading">
+            <span class="workflow-title">Project data</span>
+            <span class="workflow-subtitle">Import or edit rows</span>
+          </span>
+        </summary>
+        <div class="workflow-body">
+        <p class="hint">Use Excel to edit CSV data, paste into the table, or save/open a project file.</p>
+        <div class="control-group">
+          <div class="control-group-title">Sample</div>
+          <button id="loadSampleBtn" type="button" class="wide-button">Load sample data</button>
+        </div>
+        <div class="control-group">
+          <div class="control-group-title">CSV</div>
+          <div class="button-row button-row-equal">
+            <label class="file-button" for="csvInput">Import CSV</label>
+            <input id="csvInput" type="file" accept=".csv,text/csv" />
+            <button id="downloadCsvBtn" type="button">Export CSV</button>
+          </div>
+        </div>
+        <div class="control-group">
+          <div class="control-group-title">Project file</div>
+          <div class="button-row button-row-equal">
+            <label class="file-button" for="projectInput">Open project</label>
+            <input id="projectInput" type="file" accept=".json,application/json" />
+            <button id="saveProjectBtn" type="button">Save project</button>
+          </div>
+        </div>
+        </div>
+      </details>
+
+      <details class="panel workflow-panel" open>
+        <summary class="workflow-summary">
+          <span class="workflow-step">4</span>
+          <span class="workflow-heading">
+            <span class="workflow-title">Map layout</span>
+            <span class="workflow-subtitle">Size and labels</span>
+          </span>
+        </summary>
+        <div class="workflow-body">
+        <label>
+          Map title
+          <input id="mapTitleInput" type="text" value="Custom map" />
+        </label>
+        <div class="grid-2">
+          <label>
+            Width
+            <input id="widthInput" type="number" min="900" max="2400" step="50" value="1600" />
+          </label>
+          <label>
+            Height
+            <input id="heightInput" type="number" min="650" max="1600" step="50" value="1000" />
+          </label>
+        </div>
+        <div class="grid-2">
+          <label>
+            Label font size
+            <input id="labelSizeInput" type="number" min="10" max="30" step="1" value="16" />
+          </label>
+          <label>
+            Marker size
+            <input id="markerSizeInput" type="number" min="4" max="20" step="1" value="10" />
+          </label>
+        </div>
+        <div class="grid-2">
+          <label>
+            Line thickness
+            <input id="lineWidthInput" type="number" min="1" max="8" step="0.5" value="2" />
+          </label>
+          <label>
+            Label max chars
+            <input id="labelCharsInput" type="number" min="12" max="42" step="1" value="26" />
+          </label>
+        </div>
+        <label class="check-row">
+          <input id="showLegendInput" type="checkbox" checked />
+          Show legend
+        </label>
+        <label class="check-row">
+          <input id="showCalloutsInput" type="checkbox" checked />
+          Show items with no coordinates as callouts
+        </label>
+        <label class="check-row">
+          <input id="showLineCasingInput" type="checkbox" checked />
+          Add white casing behind leader lines
+        </label>
+        <button id="renderBtn" type="button" class="primary">Auto-place labels</button>
+        </div>
+      </details>
+
+      <details class="panel workflow-panel" open>
+        <summary class="workflow-summary">
+          <span class="workflow-step">5</span>
+          <span class="workflow-heading">
+            <span class="workflow-title">Export</span>
+            <span class="workflow-subtitle">Save final output</span>
+          </span>
+        </summary>
+        <div class="workflow-body">
+        <div class="button-row">
+          <button id="exportSvgBtn" type="button">Export SVG</button>
+          <button id="exportPngBtn" type="button">Export PNG</button>
+        </div>
+        </div>
+      </details>
+
+      <details class="panel workflow-panel" open>
+        <summary class="workflow-summary">
+          <span class="workflow-step">6</span>
+          <span class="workflow-heading">
+            <span class="workflow-title">Status</span>
+            <span class="workflow-subtitle">Map quality checklist</span>
+          </span>
+        </summary>
+        <div class="workflow-body">
+        <div id="statusBox" class="status-box">Load data to generate the map.</div>
+        </div>
+      </details>
+    </aside>
+
+    <section class="workspace">
+      <div class="table-panel">
+        <div class="table-toolbar">
+          <strong>Project table</strong>
+          <div class="button-row">
+            <button id="addRowBtn" type="button">Add row</button>
+            <button id="deleteSelectedBtn" type="button" disabled>Delete selected</button>
+            <button id="clearRowsBtn" type="button">Clear table</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table id="projectTable">
+            <thead>
+              <tr>
+                <th class="select-col">Select</th>
+                <th>Project name</th>
+                <th>Type</th>
+                <th>Longitude</th>
+                <th>Latitude</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="preview-panel">
+        <div class="preview-toolbar">
+          <strong>Preview</strong>
+          <span id="dependencyNote">Uses online D3, Papa Parse and Canada boundary data.</span>
+        </div>
+        <div id="mapHost" class="map-host">
+          <svg id="mapSvg" role="img"></svg>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <script src="presets.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+:root {
+  --bg: #eef2f1;
+  --panel: #ffffff;
+  --surface: #f8faf9;
+  --surface-strong: #f2f6f4;
+  --surface-hover: #eef5f2;
+  --ink: #222222;
+  --muted: #666666;
+  --border: #d7dfdc;
+  --border-strong: #b8c4bf;
+  --accent: #0b6b57;
+  --accent-dark: #075241;
+  --accent-soft: #dff1ea;
+  --danger: #8a1f11;
+  --warning: #8a5a00;
+  --ok: #1d6f42;
+  --focus: #217346;
+  --focus-ring: rgba(33, 115, 70, 0.13);
+  --workspace-grid: rgba(11, 107, 87, 0.035);
+  --shadow: 0 14px 38px rgba(20, 35, 31, 0.10);
+  --shadow-soft: 0 2px 10px rgba(20, 35, 31, 0.08);
+  --leader: #333333;
+  --map-background: #ffffff;
+  --map-boundary: #ffffff;
+  --map-box-border: #333333;
+}
