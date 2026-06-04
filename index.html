@@ -3,7 +3,10 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Map generator</title>
+  <title>CarteData</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&family=Merriweather:wght@400;700&family=Noto+Sans:wght@400;700&family=Open+Sans:wght@400;700&family=Roboto:wght@400;700&family=Source+Sans+3:wght@400;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
   <link id="themeStylesheet" rel="stylesheet" href="themes/goc-green.css" />
 </head>
@@ -12,16 +15,17 @@
     <div class="app-ribbon" aria-label="Application actions">
       <div class="app-brand" aria-label="Application identity">
         <svg class="app-logo" aria-hidden="true" viewBox="0 0 64 64" fill="none">
-          <rect class="logo-tile logo-tile-left" x="7" y="13" width="20" height="38" rx="4" />
-          <rect class="logo-tile logo-tile-mid" x="22" y="9" width="20" height="42" rx="4" />
-          <rect class="logo-tile logo-tile-right" x="37" y="15" width="20" height="36" rx="4" />
-          <path class="logo-line" d="M17 41 C25 28 37 35 47 21" />
-          <circle class="logo-point" cx="47" cy="21" r="5" />
-          <path class="logo-label" d="M28 38 H52" />
-          <path class="logo-label" d="M32 44 H49" />
+          <rect class="logo-frame" x="6" y="8" width="52" height="48" rx="10" />
+          <path class="logo-panel logo-panel-left" d="M14 16 L28 12 V48 L14 52 Z" />
+          <path class="logo-panel logo-panel-mid" d="M28 12 L42 17 V53 L28 48 Z" />
+          <path class="logo-panel logo-panel-right" d="M42 17 L50 14 V49 L42 53 Z" />
+          <path class="logo-route" d="M18 41 C24 29 32 34 38 24 C41 20 45 22 48 18" />
+          <circle class="logo-node" cx="18" cy="41" r="3.2" />
+          <circle class="logo-node" cx="38" cy="24" r="3.2" />
+          <circle class="logo-node logo-node-accent" cx="48" cy="18" r="4" />
         </svg>
         <div>
-          <h1>Map generator</h1>
+          <h1>CarteData</h1>
           <p>CSV to static map</p>
         </div>
       </div>
@@ -74,41 +78,6 @@
         <summary class="workflow-summary">
           <span class="workflow-step">1</span>
           <span class="workflow-heading">
-            <span class="workflow-title">Map area</span>
-            <span class="workflow-subtitle">Choose regions first</span>
-          </span>
-        </summary>
-        <div class="workflow-body">
-        <p class="hint">Choose which provinces and territories are included before placing project points.</p>
-        <div class="control-group">
-          <div class="control-group-title">Selection</div>
-          <div class="button-row button-row-equal">
-            <button id="selectAllRegionsBtn" type="button">Select all</button>
-            <button id="clearRegionsBtn" type="button">Clear</button>
-          </div>
-          <button id="selectProjectRegionsBtn" type="button" class="wide-button">Select project regions</button>
-          <label>
-            Region preset
-            <select id="regionPresetInput">
-              <option value="">Choose preset</option>
-              <option value="all">All Canada</option>
-              <option value="territories">Territories</option>
-              <option value="western">Western Canada</option>
-              <option value="prairies">Prairies</option>
-              <option value="central">Central Canada</option>
-              <option value="atlantic">Atlantic Canada</option>
-            </select>
-          </label>
-        </div>
-        <div id="regionSummary" class="mini-status"></div>
-        <div id="regionList" class="region-list">Map boundary must load before regions can be edited.</div>
-        </div>
-      </details>
-
-      <details class="panel workflow-panel" open>
-        <summary class="workflow-summary">
-          <span class="workflow-step">2</span>
-          <span class="workflow-heading">
             <span class="workflow-title">Legend and markers</span>
             <span class="workflow-subtitle">Define categories</span>
           </span>
@@ -120,42 +89,12 @@
         </div>
       </details>
 
-      <details class="panel workflow-panel" open>
-        <summary class="workflow-summary">
-          <span class="workflow-step">3</span>
-          <span class="workflow-heading">
-            <span class="workflow-title">Project data</span>
-            <span class="workflow-subtitle">Import or edit rows</span>
-          </span>
-        </summary>
-        <div class="workflow-body">
-        <p class="hint">Use Excel to edit CSV data, paste into the table, or save/open a project file.</p>
-        <div class="control-group">
-          <div class="control-group-title">Sample</div>
-          <button id="loadSampleBtn" type="button" class="wide-button">Load sample data</button>
-        </div>
-        <div class="control-group">
-          <div class="control-group-title">CSV</div>
-          <div class="button-row button-row-equal">
-            <label class="file-button" for="csvInput">Import CSV</label>
-            <input id="csvInput" type="file" accept=".csv,text/csv" />
-            <button id="downloadCsvBtn" type="button">Export CSV</button>
-          </div>
-        </div>
-        <div class="control-group">
-          <div class="control-group-title">Project file</div>
-          <div class="button-row button-row-equal">
-            <label class="file-button" for="projectInput">Open project</label>
-            <input id="projectInput" type="file" accept=".json,application/json" />
-            <button id="saveProjectBtn" type="button">Save project</button>
-          </div>
-        </div>
-        </div>
-      </details>
+      <input id="csvInput" type="file" accept=".csv,text/csv" />
+      <input id="projectInput" type="file" accept=".json,application/json" />
 
       <details class="panel workflow-panel" open>
         <summary class="workflow-summary">
-          <span class="workflow-step">4</span>
+          <span class="workflow-step">2</span>
           <span class="workflow-heading">
             <span class="workflow-title">Map layout</span>
             <span class="workflow-subtitle">Size and labels</span>
@@ -166,34 +105,66 @@
           Map title
           <input id="mapTitleInput" type="text" value="Custom map" />
         </label>
+        <label>
+          Map font
+          <select id="fontFamilyInput">
+            <option value="Lato, Arial, Helvetica, sans-serif">Lato</option>
+            <option value="Arial, Helvetica, sans-serif">Arial</option>
+            <option value="Noto Sans, Arial, Helvetica, sans-serif">Noto Sans</option>
+            <option value="Open Sans, Arial, Helvetica, sans-serif">Open Sans</option>
+            <option value="Source Sans 3, Arial, Helvetica, sans-serif">Source Sans 3</option>
+            <option value="Roboto, Arial, Helvetica, sans-serif">Roboto</option>
+            <option value="Merriweather, Georgia, serif">Merriweather</option>
+            <option value="Georgia, Times New Roman, serif">Georgia</option>
+            <option value="Verdana, Geneva, sans-serif">Verdana</option>
+          </select>
+        </label>
         <div class="grid-2">
           <label>
             Width
-            <input id="widthInput" type="number" min="900" max="2400" step="50" value="1600" />
+            <span class="input-reset-row">
+              <input id="widthInput" type="number" min="900" max="2400" step="50" value="1600" />
+              <button class="reset-default-btn" type="button" data-reset-input="widthInput" aria-label="Reset width to default" title="Reset to default">↺</button>
+            </span>
           </label>
           <label>
             Height
-            <input id="heightInput" type="number" min="650" max="1600" step="50" value="1000" />
+            <span class="input-reset-row">
+              <input id="heightInput" type="number" min="650" max="1600" step="50" value="1000" />
+              <button class="reset-default-btn" type="button" data-reset-input="heightInput" aria-label="Reset height to default" title="Reset to default">↺</button>
+            </span>
           </label>
         </div>
         <div class="grid-2">
           <label>
             Label font size
-            <input id="labelSizeInput" type="number" min="10" max="30" step="1" value="16" />
+            <span class="input-reset-row">
+              <input id="labelSizeInput" type="number" min="10" max="30" step="1" value="16" />
+              <button class="reset-default-btn" type="button" data-reset-input="labelSizeInput" aria-label="Reset label font size to default" title="Reset to default">↺</button>
+            </span>
           </label>
           <label>
-            Marker size
-            <input id="markerSizeInput" type="number" min="4" max="20" step="1" value="10" />
+            Default marker size
+            <span class="input-reset-row">
+              <input id="markerSizeInput" type="number" min="4" max="20" step="1" value="10" />
+              <button class="reset-default-btn" type="button" data-reset-input="markerSizeInput" aria-label="Reset default marker size" title="Reset to default">↺</button>
+            </span>
           </label>
         </div>
         <div class="grid-2">
           <label>
-            Line thickness
-            <input id="lineWidthInput" type="number" min="1" max="8" step="0.5" value="2" />
+            Default line width
+            <span class="input-reset-row">
+              <input id="lineWidthInput" type="number" min="1" max="8" step="0.5" value="2" />
+              <button class="reset-default-btn" type="button" data-reset-input="lineWidthInput" aria-label="Reset default line width" title="Reset to default">↺</button>
+            </span>
           </label>
           <label>
             Label max chars
-            <input id="labelCharsInput" type="number" min="12" max="42" step="1" value="26" />
+            <span class="input-reset-row">
+              <input id="labelCharsInput" type="number" min="12" max="42" step="1" value="26" />
+              <button class="reset-default-btn" type="button" data-reset-input="labelCharsInput" aria-label="Reset label max chars to default" title="Reset to default">↺</button>
+            </span>
           </label>
         </div>
         <label class="check-row">
@@ -208,29 +179,17 @@
           <input id="showLineCasingInput" type="checkbox" checked />
           Add white casing behind leader lines
         </label>
+        <label class="check-row">
+          <input id="lockMarkerCoordinatesInput" type="checkbox" checked />
+          Lock marker coordinates
+        </label>
         <button id="renderBtn" type="button" class="primary">Auto-place labels</button>
         </div>
       </details>
 
       <details class="panel workflow-panel" open>
         <summary class="workflow-summary">
-          <span class="workflow-step">5</span>
-          <span class="workflow-heading">
-            <span class="workflow-title">Export</span>
-            <span class="workflow-subtitle">Save final output</span>
-          </span>
-        </summary>
-        <div class="workflow-body">
-        <div class="button-row">
-          <button id="exportSvgBtn" type="button">Export SVG</button>
-          <button id="exportPngBtn" type="button">Export PNG</button>
-        </div>
-        </div>
-      </details>
-
-      <details class="panel workflow-panel" open>
-        <summary class="workflow-summary">
-          <span class="workflow-step">6</span>
+          <span class="workflow-step">3</span>
           <span class="workflow-heading">
             <span class="workflow-title">Status</span>
             <span class="workflow-subtitle">Map quality checklist</span>
@@ -245,33 +204,93 @@
     <section class="workspace">
       <div class="table-panel">
         <div class="table-toolbar">
-          <strong>Project table</strong>
-          <div class="button-row">
+          <div class="table-toolbar-main">
+            <strong id="tablePanelTitle">Project table</strong>
+            <div class="table-tabs" role="tablist" aria-label="Data tables">
+              <button id="projectTableTab" class="table-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="projectTablePane">Project points</button>
+              <button id="regionTableTab" class="table-tab" type="button" role="tab" aria-selected="false" aria-controls="regionTablePane">Map regions</button>
+            </div>
+          </div>
+          <div class="button-row table-actions is-active" data-table-actions="projects">
             <button id="addRowBtn" type="button">Add row</button>
             <button id="deleteSelectedBtn" type="button" disabled>Delete selected</button>
             <button id="clearRowsBtn" type="button">Clear table</button>
           </div>
+          <div class="button-row table-actions" data-table-actions="regions">
+            <button id="applyRegionValueColoursBtn" type="button">Apply colours</button>
+            <button id="resetRegionValuesBtn" type="button">Reset values</button>
+          </div>
         </div>
+        <div id="projectTablePane" class="table-pane is-active" role="tabpanel" aria-labelledby="projectTableTab">
         <div class="table-wrap">
           <table id="projectTable">
             <thead>
               <tr>
+                <th class="name-col">Project name</th>
+                <th class="footnote-col" title="Footnote">Fn</th>
+                <th class="type-col">Type</th>
+                <th class="coordinate-col">Longitude</th>
+                <th class="coordinate-col">Latitude</th>
+                <th class="line-col">Hide line</th>
                 <th class="select-col">Select</th>
-                <th>Project name</th>
-                <th>Type</th>
-                <th>Longitude</th>
-                <th>Latitude</th>
               </tr>
             </thead>
             <tbody></tbody>
           </table>
+        </div>
+        </div>
+        <div id="regionTablePane" class="table-pane region-management-panel" role="tabpanel" aria-labelledby="regionTableTab">
+          <div class="region-management-controls">
+            <label>
+              Map boundary
+              <select id="boundaryInput">
+                <option value="canada">Canada provinces and territories</option>
+                <option value="world">World countries</option>
+              </select>
+            </label>
+            <label>
+              Region preset
+              <select id="regionPresetInput">
+                <option value="">Choose preset</option>
+                <option value="all">All Canada</option>
+                <option value="territories">Territories</option>
+                <option value="western">Western Canada</option>
+                <option value="prairies">Prairies</option>
+                <option value="central">Central Canada</option>
+                <option value="atlantic">Atlantic Canada</option>
+              </select>
+            </label>
+            <div class="region-management-buttons">
+              <button id="selectAllRegionsBtn" type="button">Select all</button>
+              <button id="clearRegionsBtn" type="button">Clear</button>
+              <button id="selectProjectRegionsBtn" type="button">Use project point regions</button>
+            </div>
+            <div id="regionSummary" class="mini-status"></div>
+          </div>
+          <div class="table-wrap">
+            <table id="regionTable">
+              <thead>
+                <tr>
+                  <th class="region-name-col">Region</th>
+                  <th class="region-included-col">Included</th>
+                  <th class="region-count-col">Project count</th>
+                  <th class="region-value-col">Value</th>
+                  <th class="region-source-col">Source</th>
+                  <th class="region-preset-col">Colour preset</th>
+                  <th class="region-custom-col">Custom colour</th>
+                  <th class="region-fill-col">Preview</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
         </div>
       </div>
 
       <div class="preview-panel">
         <div class="preview-toolbar">
           <strong>Preview</strong>
-          <span id="dependencyNote">Uses online D3, Papa Parse and Canada boundary data.</span>
+          <span id="dependencyNote">Uses bundled boundary data. D3/Papa Parse load online unless vendored locally.</span>
         </div>
         <div id="mapHost" class="map-host">
           <svg id="mapSvg" role="img"></svg>
@@ -283,6 +302,8 @@
   <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <script src="presets.js"></script>
+  <script src="assets/canada-regions.js"></script>
+  <script src="assets/world-countries.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

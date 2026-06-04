@@ -7,7 +7,7 @@
     2. Add a new entry to MAP_APP_STYLE_PRESETS.
        - label: what users see in the Map style dropdown.
        - stylesheet: path to the theme CSS file.
-       - regionColours: approved province/territory fill colours. Regions cycle through this list.
+       - regionColours: approved region fill colours from lowest value to highest value.
        - categoryStyles: default marker/line styles applied to legend categories in order.
     3. To change the marker colour picker, edit MAP_APP_CATEGORY_COLOUR_PRESETS below.
     4. No build step is required. The app reads this file before app.js.

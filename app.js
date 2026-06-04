@@ -1,5 +1,32 @@
 (function () {
-  const geoUrl = "https://gist.githubusercontent.com/M1r1k/d5731bf39e1dfda5b53b4e4c560d968d/raw/c774258085ddc11776591ce95f2240d0fd0657a2/canada_provinces.geo.json";
+  if (!window.d3) {
+    const message = "CarteData could not start because D3 did not load. Check network access or vendor D3 locally before opening this file offline.";
+    const statusBox = document.querySelector("#statusBox");
+    const mapSvg = document.querySelector("#mapSvg");
+    if (statusBox) statusBox.innerHTML = `<div class="status-danger">${message}</div>`;
+    if (mapSvg) {
+      mapSvg.setAttribute("viewBox", "0 0 900 360");
+      mapSvg.innerHTML = `<rect width="900" height="360" fill="#fff7e6"></rect><text x="450" y="180" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#8a1f11">${message}</text>`;
+    }
+    return;
+  }
+
+  const boundarySources = {
+    canada: {
+      label: "Canada provinces and territories",
+      url: "https://data.opendatasoft.com/api/explore/v2.1/catalog/datasets/georef-canada-province%40public/exports/geojson?lang=en&timezone=America%2FToronto",
+      fallbackUrl: "assets/canada-regions.geojson",
+      fallbackKey: "canada",
+      projection: "canada"
+    },
+    world: {
+      label: "World countries",
+      url: "https://datahub.io/core/geo-boundaries-world-110m/_r/-/countries.geojson",
+      fallbackUrl: "assets/world-countries.geojson",
+      fallbackKey: "world",
+      projection: "world"
+    }
+  };
 
   const sampleRows = [
     { name: "Grays Bay Road and Port", type: "Referred Project", lon: -108.4, lat: 68.5 },
@@ -42,12 +69,23 @@
 
   const csvColumnAliases = {
     name: ["name", "project", "project name"],
+    footnote: ["footnote", "footnote marker", "note", "superscript"],
     type: ["type", "category", "project type"],
     lon: ["lon", "longitude", "long"],
-    lat: ["lat", "latitude"]
+    lat: ["lat", "latitude"],
+    hideLine: ["hide line", "hide lines", "hideline", "no line", "no leader line"]
   };
 
-  const tableFields = ["name", "type", "lon", "lat"];
+  const tableFields = ["name", "footnote", "type", "lon", "lat"];
+
+  const layoutDefaults = {
+    widthInput: 1600,
+    heightInput: 1000,
+    labelSizeInput: 16,
+    markerSizeInput: 10,
+    lineWidthInput: 2,
+    labelCharsInput: 26
+  };
 
   const markerShapes = [
     { value: "circle", label: "Circle" },
@@ -131,6 +169,8 @@
       stroke: "#ffffff",
       markerSize: 10,
       lineWidth: 2,
+      markerSizeCustom: false,
+      lineWidthCustom: false,
       collapsed: false,
       removable: false
     },
@@ -143,6 +183,8 @@
       stroke: "#555555",
       markerSize: 10,
       lineWidth: 2,
+      markerSizeCustom: false,
+      lineWidthCustom: false,
       collapsed: false,
       removable: true
     }
@@ -150,6 +192,15 @@
 
   const els = {
     tableBody: document.querySelector("#projectTable tbody"),
+    regionTableBody: document.querySelector("#regionTable tbody"),
+    tablePanelTitle: document.querySelector("#tablePanelTitle"),
+    projectTableTab: document.querySelector("#projectTableTab"),
+    regionTableTab: document.querySelector("#regionTableTab"),
+    projectTablePane: document.querySelector("#projectTablePane"),
+    regionTablePane: document.querySelector("#regionTablePane"),
+    updateRegionValuesBtn: document.querySelector("#updateRegionValuesBtn"),
+    applyRegionValueColoursBtn: document.querySelector("#applyRegionValueColoursBtn"),
+    resetRegionValuesBtn: document.querySelector("#resetRegionValuesBtn"),
     themeStylesheet: document.querySelector("#themeStylesheet"),
     csvInput: document.querySelector("#csvInput"),
     projectInput: document.querySelector("#projectInput"),
@@ -177,17 +228,19 @@
     markerSizeInput: document.querySelector("#markerSizeInput"),
     lineWidthInput: document.querySelector("#lineWidthInput"),
     labelCharsInput: document.querySelector("#labelCharsInput"),
+    fontFamilyInput: document.querySelector("#fontFamilyInput"),
     showLegendInput: document.querySelector("#showLegendInput"),
     showCalloutsInput: document.querySelector("#showCalloutsInput"),
     showLineCasingInput: document.querySelector("#showLineCasingInput"),
+    lockMarkerCoordinatesInput: document.querySelector("#lockMarkerCoordinatesInput"),
     categoryList: document.querySelector("#categoryList"),
     addCategoryBtn: document.querySelector("#addCategoryBtn"),
-    regionList: document.querySelector("#regionList"),
     regionSummary: document.querySelector("#regionSummary"),
     selectAllRegionsBtn: document.querySelector("#selectAllRegionsBtn"),
     clearRegionsBtn: document.querySelector("#clearRegionsBtn"),
     selectProjectRegionsBtn: document.querySelector("#selectProjectRegionsBtn"),
     resetRegionColoursBtn: document.querySelector("#resetRegionColoursBtn"),
+    boundaryInput: document.querySelector("#boundaryInput"),
     mapStylePresetInput: document.querySelector("#mapStylePresetInput"),
     regionPresetInput: document.querySelector("#regionPresetInput"),
     svg: d3.select("#mapSvg"),
@@ -203,7 +256,10 @@
   let nextRowId = 1;
   let regionVisibility = {};
   let regionFills = {};
+  let regionValues = {};
+  let regionColourOverrides = {};
   let currentMapStylePreset = "goc-green";
+  let currentBoundary = "canada";
 
   function getMapStylePreset(presetId = currentMapStylePreset) {
     return mapStylePresets[presetId] || mapStylePresets["goc-green"];
@@ -309,6 +365,13 @@
     category.lineWidth = optionalNumber(category.lineWidth) || settings.lineWidth;
   }
 
+  function syncDefaultCategorySizes(settings = getSettings()) {
+    categorySettings.forEach(category => {
+      if (!category.markerSizeCustom) category.markerSize = settings.markerSize;
+      if (!category.lineWidthCustom) category.lineWidth = settings.lineWidth;
+    });
+  }
+
   function getPresetValueForColour(colour) {
     const preset = colourPresets.find(option => option.value.toLowerCase() === String(colour || "").toLowerCase());
     return preset ? preset.value : "";
@@ -371,6 +434,21 @@
     return Number.isFinite(n) ? n : "";
   }
 
+  function toBoolean(value) {
+    if (value === true || value === false) return value;
+    const raw = String(value || "").trim().toLowerCase();
+    return ["1", "true", "yes", "y", "hide", "hidden", "no line", "no leader line"].includes(raw);
+  }
+
+  function normalizeFootnote(value) {
+    return String(value || "").trim();
+  }
+
+  function getRenderableFootnote(value) {
+    const footnote = normalizeFootnote(value);
+    return /^[A-Za-z0-9]+$/.test(footnote) ? footnote : "";
+  }
+
   function normalizeHeader(value) {
     return String(value || "").trim().toLowerCase();
   }
@@ -386,47 +464,75 @@
 
   function normalizeRow(row) {
     return {
+      rowId: row && row.rowId ? String(row.rowId) : "",
       name: String(getField(row, csvColumnAliases.name) || "").trim(),
+      footnote: normalizeFootnote(getField(row, csvColumnAliases.footnote)),
       type: cleanType(getField(row, csvColumnAliases.type) || getDefaultCategory().label),
       lon: toNumber(getField(row, csvColumnAliases.lon)),
-      lat: toNumber(getField(row, csvColumnAliases.lat))
+      lat: toNumber(getField(row, csvColumnAliases.lat)),
+      hideLine: toBoolean(getField(row, csvColumnAliases.hideLine))
     };
   }
 
-  function setRows(rows, importMessages = []) {
+  function setRows(rows, importMessages = [], options = {}) {
     pendingCsvImport = null;
     lastImportMessages = importMessages;
-    manualLabelPositions = {};
-    manualBoxPositions = {};
+    if (!options.preserveManualPositions) {
+      manualLabelPositions = {};
+      manualBoxPositions = {};
+    }
     nextRowId = 1;
     els.tableBody.innerHTML = "";
     rows.forEach(row => addRow(normalizeRow(row)));
     updateDeleteButtonState();
-    render();
+    if (canadaGeo && Array.isArray(canadaGeo.features)) applyRegionColoursByValue(false);
+    if (options.render !== false) render();
   }
 
-  function addRow(row = { name: "", type: "referred", lon: "", lat: "" }) {
+  function addRow(row = { name: "", footnote: "", type: "referred", lon: "", lat: "", hideLine: false }) {
     const tr = document.createElement("tr");
-    tr.dataset.rowId = String(nextRowId);
-    nextRowId += 1;
+    const rowId = row.rowId ? String(row.rowId) : String(nextRowId);
+    tr.dataset.rowId = rowId;
+    const numericRowId = Number(rowId);
+    nextRowId = Number.isFinite(numericRowId) ? Math.max(nextRowId, numericRowId + 1) : nextRowId + 1;
     tr.innerHTML = `
-      <td class="select-cell"><input type="checkbox" class="row-select" aria-label="Select row for deletion"></td>
-      <td><input class="name-input" type="text" value="${escapeHtml(row.name || "")}" aria-label="Project name"></td>
+      <td><input class="name-input" type="text" value="${escapeHtml(row.name || "")}" title="${escapeHtml(row.name || "")}" aria-label="Project name"></td>
+      <td><input class="footnote-input" type="text" value="${escapeHtml(row.footnote || "")}" aria-label="Footnote marker" maxlength="2" pattern="[A-Za-z0-9]*"></td>
       <td>
-        <select class="type-input" aria-label="Project type">
+        <select class="type-input" title="${escapeHtml(getCategoryLabel(row.type))}" aria-label="Project type">
           ${getTypeOptions(row.type)}
         </select>
       </td>
       <td><input class="lon-input" type="number" step="any" value="${row.lon === "" ? "" : row.lon}" aria-label="Longitude"></td>
       <td><input class="lat-input" type="number" step="any" value="${row.lat === "" ? "" : row.lat}" aria-label="Latitude"></td>
+      <td class="line-cell"><input type="checkbox" class="hide-line-input" aria-label="Hide leader line"${row.hideLine ? " checked" : ""}></td>
+      <td class="select-cell"><input type="checkbox" class="row-select" aria-label="Select row for deletion"></td>
     `;
     tr.querySelector(".type-input").value = cleanType(row.type);
-    tr.querySelectorAll("input,select").forEach(input => input.addEventListener("change", render));
-    tr.querySelectorAll("input[type='text'],input[type='number']").forEach(input => input.addEventListener("input", debounce(render, 350)));
+    tr.querySelectorAll("input,select").forEach(input => input.addEventListener("change", () => {
+      updateRowTitles(tr);
+      refreshRegionColoursFromRows();
+      render();
+    }));
+    tr.querySelectorAll("input[type='text'],input[type='number']").forEach(input => input.addEventListener("input", debounce(() => {
+      updateRowTitles(tr);
+      refreshRegionColoursFromRows();
+      render();
+    }, 350)));
     tr.querySelector(".row-select").addEventListener("change", updateDeleteButtonState);
     els.tableBody.appendChild(tr);
     updateDeleteButtonState();
     return tr;
+  }
+
+  function refreshRegionColoursFromRows() {
+    if (!canadaGeo || !Array.isArray(canadaGeo.features)) return;
+    applyRegionColoursByValue(false);
+  }
+
+  function updateRowTitles(tr) {
+    tr.querySelector(".name-input").title = tr.querySelector(".name-input").value.trim();
+    tr.querySelector(".type-input").title = getCategoryLabel(tr.querySelector(".type-input").value);
   }
 
   function getTableRows() {
@@ -445,10 +551,12 @@
     return getTableRows().map(tr => ({
       rowId: tr.dataset.rowId,
       name: tr.querySelector(".name-input").value.trim(),
+      footnote: normalizeFootnote(tr.querySelector(".footnote-input").value),
       type: cleanType(tr.querySelector(".type-input").value),
       lon: toNumber(tr.querySelector(".lon-input").value),
-      lat: toNumber(tr.querySelector(".lat-input").value)
-    })).filter(row => row.name.length > 0);
+      lat: toNumber(tr.querySelector(".lat-input").value),
+      hideLine: tr.querySelector(".hide-line-input").checked
+    })).filter(row => row.name.length > 0 || row.lon !== "" || row.lat !== "");
   }
 
   function getSettings() {
@@ -460,9 +568,11 @@
       markerSize: Number(els.markerSizeInput.value) || 10,
       lineWidth: Number(els.lineWidthInput.value) || 2,
       labelMaxChars: Number(els.labelCharsInput.value) || 26,
+      fontFamily: els.fontFamilyInput.value || "Lato, Arial, Helvetica, sans-serif",
       showLegend: els.showLegendInput.checked,
       showCallouts: els.showCalloutsInput.checked,
-      showLineCasing: els.showLineCasingInput.checked
+      showLineCasing: els.showLineCasingInput.checked,
+      lockMarkerCoordinates: els.lockMarkerCoordinatesInput.checked
     };
   }
 
@@ -474,14 +584,26 @@
     if (settings.markerSize !== undefined) els.markerSizeInput.value = settings.markerSize;
     if (settings.lineWidth !== undefined) els.lineWidthInput.value = settings.lineWidth;
     if (settings.labelMaxChars !== undefined) els.labelCharsInput.value = settings.labelMaxChars;
+    if (settings.fontFamily !== undefined) els.fontFamilyInput.value = settings.fontFamily;
     if (settings.showLegend !== undefined) els.showLegendInput.checked = Boolean(settings.showLegend);
     if (settings.showCallouts !== undefined) els.showCalloutsInput.checked = Boolean(settings.showCallouts);
     if (settings.showLineCasing !== undefined) els.showLineCasingInput.checked = Boolean(settings.showLineCasing);
+    if (settings.lockMarkerCoordinates !== undefined) els.lockMarkerCoordinatesInput.checked = Boolean(settings.lockMarkerCoordinates);
   }
 
   function getRegionName(feature, index) {
     const props = feature && feature.properties ? feature.properties : {};
-    return props.name || props.NAME || props.Name || props.prov_name_en || props.PRENAME || props.PRNAME || props.territory || props.province || `Region ${index + 1}`;
+    return normalizeRegionName(props.name || props.NAME || props.Name || props.ADMIN || props.admin || props.sovereignt || props.SOVEREIGNT || props.prov_name_en || props.prov_name || props.province_name || props.PRENAME || props.PRNAME || props.territory || props.province, index);
+  }
+
+  function normalizeRegionName(value, index) {
+    if (Array.isArray(value)) return normalizeRegionName(value[0], index);
+    if (value && typeof value === "object") {
+      const objectValue = value.en || value.EN || value.name || value.label || Object.values(value).find(item => typeof item === "string");
+      return normalizeRegionName(objectValue, index);
+    }
+    const name = String(value || "").trim();
+    return name || `Region ${index + 1}`;
   }
 
   function getRegionId(feature, index) {
@@ -526,35 +648,171 @@
     return regionFills[getRegionId(feature, index)] || colours[index % colours.length];
   }
 
-  function renderRegionControls() {
+  function getRegionColourPresetLabel(index, total) {
+    if (total <= 1) return "Colour 1";
+    if (index === 0) return `Colour ${index + 1} - lowest`;
+    if (index === total - 1) return `Colour ${index + 1} - highest`;
+    return `Colour ${index + 1}`;
+  }
+
+  function getRegionRows() {
+    if (!canadaGeo || !Array.isArray(canadaGeo.features)) return [];
+    return canadaGeo.features
+      .map((feature, index) => ({
+        feature,
+        index,
+        id: getRegionId(feature, index),
+        name: getRegionName(feature, index)
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  function getProjectRegionCounts(rows = getRows()) {
+    const counts = {};
+    rows.forEach(row => {
+      if (row.lon === "" || row.lat === "") return;
+      const regionId = getRegionIdForPoint(Number(row.lon), Number(row.lat));
+      if (!regionId) return;
+      counts[regionId] = (counts[regionId] || 0) + 1;
+    });
+    return counts;
+  }
+
+  function normalizeRegionValue(value) {
+    if (value === "" || value === null || value === undefined) return "";
+    const numberValue = Number(String(value).trim());
+    return Number.isFinite(numberValue) ? numberValue : "";
+  }
+
+  function getRegionTableRows() {
+    const counts = getProjectRegionCounts();
+    return getRegionRows().map(region => {
+      const count = counts[region.id] || 0;
+      const hasManualValue = Object.prototype.hasOwnProperty.call(regionValues, region.id);
+      const storedValue = hasManualValue ? normalizeRegionValue(regionValues[region.id]) : count;
+      return {
+        ...region,
+        count,
+        value: storedValue,
+        valueSource: hasManualValue ? "Manual" : "Project count",
+        colourSource: regionColourOverrides[region.id] ? "Manual" : "Auto by value",
+        included: regionVisibility[region.id] !== false,
+        colour: getRegionFill(region.feature, region.index)
+      };
+    });
+  }
+
+  function getColourForRegionValue(value, allValues, colours = getCurrentRegionColourSet()) {
+    const numericValue = normalizeRegionValue(value);
+    if (numericValue === "" || !colours.length) return colours[0] || "#c7ded5";
+
+    const numericValues = allValues
+      .map(normalizeRegionValue)
+      .filter(item => item !== "");
+    if (!numericValues.length) return colours[0] || "#c7ded5";
+
+    const min = Math.min(...numericValues);
+    const max = Math.max(...numericValues);
+    if (min === max) return numericValue > 0 ? colours[colours.length - 1] : colours[0];
+
+    const ratio = (numericValue - min) / (max - min);
+    const colourIndex = Math.max(0, Math.min(colours.length - 1, Math.round(ratio * (colours.length - 1))));
+    return colours[colourIndex];
+  }
+
+  function applyRegionColoursByValue(shouldRender = true) {
+    if (!canadaGeo || !Array.isArray(canadaGeo.features)) return;
+    const regions = getRegionTableRows();
+    const includedValues = regions
+      .filter(region => region.included)
+      .map(region => region.value);
+    const comparisonValues = includedValues.length ? includedValues : regions.map(region => region.value);
+    regions.forEach(region => {
+      if (!regionColourOverrides[region.id]) {
+        regionFills[region.id] = getColourForRegionValue(region.value, comparisonValues);
+      }
+    });
+    renderRegionControls();
+    renderRegionValueTable();
+    if (shouldRender) render();
+  }
+
+  function updateRegionValuesFromProjectPoints(options = {}) {
+    if (!canadaGeo || !Array.isArray(canadaGeo.features)) return;
+    const shouldSelectRegions = options.selectRegions !== false;
+    const counts = getProjectRegionCounts();
+    regionValues = {};
+
+    getRegionRows().forEach(region => {
+      const count = counts[region.id] || 0;
+      if (shouldSelectRegions) regionVisibility[region.id] = count > 0;
+    });
+
+    applyRegionColoursByValue(false);
+    render();
+    setStatusMessage(`Updated region colours from project counts in ${Object.keys(counts).length} region(s). Manual region values were cleared.`, "ok");
+  }
+
+  function resetRegionValues() {
+    regionValues = {};
+    applyRegionColoursByValue(false);
+    render();
+    setStatusMessage("Region values reset. The table now shows project counts as default values.", "ok");
+  }
+
+  function renderRegionValueTable() {
+    if (!els.regionTableBody) return;
     if (!canadaGeo || !Array.isArray(canadaGeo.features)) {
-      els.regionList.textContent = "Map boundary must load before regions can be edited.";
-      els.regionSummary.textContent = "";
+      els.regionTableBody.innerHTML = `<tr><td colspan="8" class="empty-table-message">Map boundary must load before region values can be edited.</td></tr>`;
       return;
     }
 
-    initializeRegionVisibility();
+    const rows = getRegionTableRows();
     const approvedColours = getCurrentRegionColourSet();
-    const regions = canadaGeo.features
-      .map((feature, index) => ({ id: getRegionId(feature, index), name: getRegionName(feature, index), colour: getRegionFill(feature, index) }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-
-    els.regionList.innerHTML = regions.map(region => `
-      <div class="region-row">
-        <label class="check-row">
-          <input class="region-input" type="checkbox" value="${escapeHtml(region.id)}"${regionVisibility[region.id] !== false ? " checked" : ""} />
-          <span>${escapeHtml(region.name)}</span>
-        </label>
-        <select class="region-colour-set-input" data-region-id="${escapeHtml(region.id)}" aria-label="${escapeHtml(region.name)} approved fill colour">
-          <option value="">Custom</option>
-          ${approvedColours.map((colour, index) => `<option value="${escapeHtml(colour)}"${String(region.colour).toLowerCase() === colour.toLowerCase() ? " selected" : ""}>Colour ${index + 1}</option>`).join("")}
-        </select>
-        <input class="region-colour-input" type="color" value="${escapeHtml(region.colour)}" aria-label="${escapeHtml(region.name)} fill colour" data-region-id="${escapeHtml(region.id)}" />
-      </div>
+    els.regionTableBody.innerHTML = rows.map(region => `
+      <tr>
+        <td><span class="region-table-name" title="${escapeHtml(region.name)}">${escapeHtml(region.name)}</span></td>
+        <td class="region-included-cell">
+          <input class="region-table-included-input" type="checkbox" data-region-id="${escapeHtml(region.id)}" aria-label="Include ${escapeHtml(region.name)}"${region.included ? " checked" : ""}>
+        </td>
+        <td class="region-count-cell">${region.count}</td>
+        <td>
+          <input class="region-value-input" type="number" step="any" value="${region.value === "" ? "" : region.value}" data-region-id="${escapeHtml(region.id)}" aria-label="${escapeHtml(region.name)} region colour value">
+        </td>
+        <td class="region-source-cell">${escapeHtml(region.valueSource)}</td>
+        <td>
+          <select class="region-colour-set-input" data-region-id="${escapeHtml(region.id)}" aria-label="${escapeHtml(region.name)} approved fill colour">
+            <option value=""${region.colourSource === "Auto by value" ? " selected" : ""}>Auto by value</option>
+            ${approvedColours.map((colour, index) => `<option value="${escapeHtml(colour)}"${region.colourSource !== "Auto by value" && String(region.colour).toLowerCase() === colour.toLowerCase() ? " selected" : ""}>${escapeHtml(getRegionColourPresetLabel(index, approvedColours.length))}</option>`).join("")}
+          </select>
+        </td>
+        <td>
+          <input class="region-colour-input" type="color" value="${escapeHtml(region.colour)}" aria-label="${escapeHtml(region.name)} fill colour" data-region-id="${escapeHtml(region.id)}">
+        </td>
+        <td>
+          <span class="region-fill-preview">
+            <span class="region-fill-swatch" style="background:${escapeHtml(region.colour)}"></span>
+            <span>${escapeHtml(region.colour)}</span>
+          </span>
+        </td>
+      </tr>
     `).join("");
+  }
 
+  function renderRegionControls() {
+    if (!canadaGeo || !Array.isArray(canadaGeo.features)) {
+      els.regionSummary.textContent = "";
+      renderRegionValueTable();
+      return;
+    }
+
+    els.regionPresetInput.disabled = currentBoundary !== "canada";
+    els.regionPresetInput.title = currentBoundary === "canada" ? "" : "Region presets are currently Canada-specific.";
+    initializeRegionVisibility();
+    const regions = getRegionRows();
     const selectedCount = regions.filter(region => regionVisibility[region.id] !== false).length;
     els.regionSummary.textContent = `${selectedCount} of ${regions.length} regions selected.`;
+    renderRegionValueTable();
   }
 
   function setAllRegions(visible) {
@@ -606,6 +864,7 @@
       regionFills[getRegionId(feature, index)] = colours[index % colours.length];
     });
     renderRegionControls();
+    renderRegionValueTable();
     if (shouldRender) render();
   }
 
@@ -634,8 +893,10 @@
         category.stroke = style.stroke;
         category.markerSize = optionalNumber(style.markerSize) || category.markerSize || getSettings().markerSize;
         category.lineWidth = optionalNumber(style.lineWidth) || category.lineWidth || getSettings().lineWidth;
+        category.markerSizeCustom = false;
+        category.lineWidthCustom = false;
       });
-      applyRegionColourSet(preset.regionColours || fallbackRegionColours, false);
+      applyRegionColoursByValue(false);
       renderCategoryEditors();
       updateTypeOptions();
     }
@@ -644,27 +905,12 @@
   }
 
   function resetRegionColours() {
-    applyRegionColourSet();
+    regionColourOverrides = {};
+    applyRegionColoursByValue();
   }
 
   function selectRegionsWithProjectPoints() {
-    if (!canadaGeo || !Array.isArray(canadaGeo.features)) return;
-
-    const rows = getRows();
-    const selectedRegionIds = {};
-    rows.forEach(row => {
-      if (row.lon === "" || row.lat === "") return;
-      const regionId = getRegionIdForPoint(Number(row.lon), Number(row.lat));
-      if (regionId) selectedRegionIds[regionId] = true;
-    });
-
-    canadaGeo.features.forEach((feature, index) => {
-      const regionId = getRegionId(feature, index);
-      regionVisibility[regionId] = Boolean(selectedRegionIds[regionId]);
-    });
-    renderRegionControls();
-    render();
-    setStatusMessage(`Selected ${Object.keys(selectedRegionIds).length} region(s) containing project points.`, "ok");
+    updateRegionValuesFromProjectPoints({ selectRegions: true });
   }
 
   function wrapLabel(text, maxChars) {
@@ -685,32 +931,79 @@
   }
 
   function preferredSide(d, settings, mapBounds) {
-    if (d.lon < -118) return "left";
-    if (d.lon > -70) return "right";
-    if (d.lat > 63) return "top";
-    if (d.lon > -95 && d.lon < -70 && d.lat < 52) return "bottom";
+    if (currentBoundary === "canada") {
+      const name = labelKeyText(d);
+      if (name.includes("grays") || name.includes("arctic") || name.includes("mackenzie")) return "top";
+      if (name.includes("taltson") || name.includes("churchill")) return "right";
+      if (d.lon >= -116 && d.lon <= -108 && d.lat >= 59) return "right";
+      if (d.lon >= -116 && d.lon <= -108 && d.lat >= 55) return "bottom";
+      if (d.lon >= -106 && d.lon <= -100 && d.lat >= 53 && d.lat <= 56) return "bottom";
+      if (d.lon <= -123 && d.lat <= 59) return "left";
+      if (d.lon <= -104 && d.lat >= 62) return "top";
+      if (d.lon > -75 && d.lat >= 56) return "right";
+      if (d.lon > -84 && d.lon < -70 && d.lat < 50) return d.lon < -76 ? "bottom" : "right";
+      if (d.lon > -70) return "right";
+      if (d.lon > -98 && d.lat >= 56) return "right";
+      if (d.lat > 63) return "top";
+      if (d.lon < -118) return "left";
+    }
+
     const mapCenter = (mapBounds.x0 + mapBounds.x1) / 2;
     return d.x < mapCenter ? "left" : "right";
+  }
+
+  function createProjection(geo, settings) {
+    const source = boundarySources[currentBoundary] || boundarySources.canada;
+    if (source.projection === "world") {
+      return d3.geoEqualEarth()
+        .fitExtent([[settings.width * 0.06, settings.height * 0.10], [settings.width * 0.94, settings.height * 0.74]], geo);
+    }
+
+    return d3.geoConicConformal()
+      .parallels([49, 77])
+      .rotate([96, 0])
+      .center([0, 61])
+      .fitExtent([[settings.width * 0.09, settings.height * 0.07], [settings.width * 0.91, settings.height * 0.78]], geo);
   }
 
   function makeLabelBox(d, side, settings) {
     const lines = wrapLabel(d.name, settings.labelMaxChars);
     const lineHeight = settings.labelSize * 1.2;
+    const footnote = getRenderableFootnote(d.footnote);
     const longest = Math.max(...lines.map(line => line.length));
-    const textWidth = Math.max(80, longest * settings.labelSize * 0.58);
+    const baseTextWidth = Math.max(80, longest * settings.labelSize * 0.58);
+    const footnoteWidth = footnote ? footnote.length * settings.labelSize * 0.42 + 4 : 0;
+    const textWidth = Math.max(baseTextWidth, lines[lines.length - 1].length * settings.labelSize * 0.58 + footnoteWidth);
     const textHeight = lines.length * lineHeight;
-    return { lines, lineHeight, textWidth, textHeight, side };
+    return { lines, lineHeight, textWidth, textHeight, footnote, side };
   }
 
   function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
   }
 
+  function labelFontSize(label) {
+    return label.lineHeight / 1.2;
+  }
+
+  function labelVisualHeight(label) {
+    return label.textHeight - label.lineHeight + labelFontSize(label);
+  }
+
+  function labelBaselineForCenter(centerY, label) {
+    return centerY + labelFontSize(label) - labelVisualHeight(label) / 2;
+  }
+
+  function clampLabelBaseline(y, label, minY, maxY) {
+    const fontSize = labelFontSize(label);
+    return clamp(y, minY + fontSize, maxY - labelVisualHeight(label) + fontSize);
+  }
+
   function createHorizontalSlots(items, boxes, side, settings, mapBounds) {
     const x0 = 30;
     const x1 = settings.width - 30;
-    const gap = Math.max(18, settings.labelSize * 1.25);
-    const rowGap = Math.max(10, settings.labelSize * 0.75);
+    const gap = Math.max(28, settings.labelSize * 1.8);
+    const rowGap = Math.max(18, settings.labelSize * 1.2);
     const baseY = side === "top" ? mapBounds.y0 - 58 : mapBounds.y1 + 56;
     const rows = [];
 
@@ -718,7 +1011,7 @@
       const box = boxes[index];
       const minX = x0;
       const maxX = Math.max(x0, x1 - box.textWidth);
-      const desiredX = clamp(item.x - box.textWidth / 2, minX, maxX);
+      const desiredX = clamp(item.x - box.textWidth / 2 + getDesignerHorizontalOffset(item, side, settings), minX, maxX);
       let targetRow = null;
 
       for (const row of rows) {
@@ -749,17 +1042,30 @@
       }
     });
 
+    const rowHeights = rows.map(row => row.reduce((height, slot) => Math.max(height, slot.box.textHeight), 0));
+    const rowOffsets = [];
+    rowHeights.reduce((offset, height, index) => {
+      rowOffsets[index] = offset;
+      return offset + height + rowGap;
+    }, 0);
+
+    const totalBlockHeight = rowHeights.reduce((sum, height) => sum + height, 0) + Math.max(0, rows.length - 1) * rowGap;
+    const minY = Math.max(50, settings.labelSize * 1.2 + 12);
+    const maxY = settings.height - totalBlockHeight - 24;
+    const blockShift = side === "top"
+      ? Math.max(0, minY - (baseY - totalBlockHeight))
+      : Math.max(0, baseY + totalBlockHeight - (settings.height - 24));
+
     const slotsByItem = new Map();
     rows.forEach((row, rowIndex) => {
-      const rowHeight = row.reduce((height, slot) => Math.max(height, slot.box.textHeight), 0);
       row.forEach(slot => {
-        const yOffset = rowIndex * (rowHeight + rowGap);
-        const minY = Math.max(50, slot.box.lineHeight + 12);
-        const maxY = Math.max(minY, settings.height - slot.box.textHeight - 24);
+        const y = side === "top"
+          ? baseY - rowOffsets[rowIndex] + blockShift
+          : baseY + rowOffsets[rowIndex] - blockShift;
         slotsByItem.set(slot.item, {
           side,
           x: slot.x,
-          y: clamp(side === "top" ? baseY - yOffset : baseY + yOffset, minY, maxY),
+          y: clamp(y, minY, Math.max(minY, maxY + rowOffsets[rowIndex])),
           box: slot.box
         });
       });
@@ -768,28 +1074,148 @@
     return items.map(item => slotsByItem.get(item));
   }
 
+  function createVerticalSlots(items, boxes, side, settings, mapBounds) {
+    const labelGap = Math.max(22, settings.labelSize * 1.35);
+    const minY = Math.max(58, settings.labelSize * 2);
+    const maxY = settings.height - 44;
+    const slots = items.map((item, index) => {
+      const box = boxes[index];
+      const centerY = item.y + getDesignerVerticalOffset(item, side, settings);
+      return {
+        item,
+        box,
+        y: clampLabelBaseline(labelBaselineForCenter(centerY, box), box, minY, maxY)
+      };
+    });
+
+    slots.sort((a, b) => a.y - b.y);
+    for (let i = 1; i < slots.length; i += 1) {
+      const previous = slots[i - 1];
+      const current = slots[i];
+      const previousBottom = previous.y - labelFontSize(previous.box) + labelVisualHeight(previous.box);
+      const minCurrentY = previousBottom + labelGap + labelFontSize(current.box);
+      if (current.y < minCurrentY) current.y = minCurrentY;
+    }
+
+    for (let i = slots.length - 1; i >= 0; i -= 1) {
+      const slot = slots[i];
+      const maxSlotY = maxY - labelVisualHeight(slot.box) + labelFontSize(slot.box);
+      if (slot.y > maxSlotY) slot.y = maxSlotY;
+      if (i < slots.length - 1) {
+        const next = slots[i + 1];
+        const nextTop = next.y - labelFontSize(next.box);
+        const maxBeforeNext = nextTop - labelGap - labelVisualHeight(slot.box) + labelFontSize(slot.box);
+        if (slot.y > maxBeforeNext) slot.y = maxBeforeNext;
+      }
+      slot.y = Math.max(slot.y, minY + labelFontSize(slot.box));
+    }
+
+    const slotsByItem = new Map();
+    slots.forEach(slot => {
+      const lineOffset = getDesignerLineOffset(slot.item, side, settings);
+      const rightX = clamp(slot.item.x + lineOffset, mapBounds.x0 + 20, settings.width - slot.box.textWidth - 30);
+      const leftX = clamp(slot.item.x - lineOffset, 30 + slot.box.textWidth, mapBounds.x1 - 20);
+      slotsByItem.set(slot.item, {
+        side,
+        x: side === "left" ? leftX : rightX,
+        y: slot.y,
+        box: slot.box
+      });
+    });
+
+    return items.map(item => slotsByItem.get(item));
+  }
+
+  function labelKeyText(item) {
+    return String(item.name || "").toLowerCase();
+  }
+
+  function getDesignerLineOffset(item, side, settings) {
+    const unit = settings.labelSize;
+    const base = Math.max(130, unit * 8);
+    if (currentBoundary !== "canada") return base;
+
+    const name = labelKeyText(item);
+    if (side === "left") {
+      if (item.lon <= -126) return Math.max(220, unit * 13);
+      if (name.includes("north coast") || name.includes("lng canada")) return Math.max(190, unit * 11);
+      return Math.max(170, unit * 10);
+    }
+
+    if (side === "right") {
+      if (name.includes("iqaluit")) return Math.max(210, unit * 12);
+      if (name.includes("churchill") || name.includes("taltson")) return Math.max(310, unit * 18);
+      if (item.lon > -76 && item.lat < 48) return Math.max(175, unit * 10);
+      return base;
+    }
+
+    return base;
+  }
+
+  function getDesignerHorizontalOffset(item, side, settings) {
+    if (currentBoundary !== "canada") return 0;
+    const unit = settings.labelSize;
+    const name = labelKeyText(item);
+
+    if (side === "top") {
+      if (name.includes("mackenzie")) return -unit * 12;
+      if (name.includes("arctic")) return -unit * 10;
+      if (name.includes("grays")) return -unit * 8;
+      if (item.lon < -118) return -unit * 8;
+      return -unit * 3;
+    }
+
+    if (side === "bottom") {
+      if (name.includes("crawford")) return -unit * 4;
+      if (name.includes("darlington")) return -unit * 1;
+      if (name.includes("pathways")) return -unit * 7;
+      if (name.includes("mcilvenna")) return -unit * 4;
+      return unit * 1.5;
+    }
+
+    return 0;
+  }
+
+  function getDesignerVerticalOffset(item, side, settings) {
+    if (currentBoundary !== "canada") return 0;
+    const unit = settings.labelSize;
+    const name = labelKeyText(item);
+
+    if (side === "left") {
+      if (name.includes("northwest critical")) return -unit * 5;
+      if (name.includes("red chris")) return -unit * 2.2;
+      if (name.includes("ksi lisims")) return unit * 0.3;
+      if (name.includes("north coast")) return unit * 3.4;
+      if (name.includes("lng canada")) return unit * 6;
+      if (item.lat >= 58) return -unit * 3.8;
+      if (item.lat >= 55) return -unit * 1.8;
+      if (item.lat <= 52) return unit * 3.2;
+      return unit * 1.2;
+    }
+
+    if (side === "right") {
+      if (name.includes("taltson")) return -unit * 8;
+      if (name.includes("churchill")) return -unit * 5.5;
+      if (name.includes("iqaluit")) return -unit * 0.5;
+      if (name.includes("northcliff")) return unit * 2;
+      if (name.includes("wind west")) return unit * 4.2;
+      if (name.includes("nouveau")) return unit * 5.8;
+      if (name.includes("contrecoeur")) return unit * 8;
+      if (name.includes("alto")) return unit * 10.5;
+      if (item.lon > -76 && item.lat < 48) return unit * 4.2;
+      if (item.lon > -70 && item.lat < 48) return unit * 3.2;
+      if (item.lat >= 58) return -unit * 0.8;
+      return unit * 0.8;
+    }
+
+    return 0;
+  }
+
   function createSlots(items, side, settings, mapBounds) {
-    const margin = 26;
-    const labelGap = settings.labelSize * 0.65;
     const boxes = items.map(d => makeLabelBox(d, side, settings));
 
     if (side === "left" || side === "right") {
-      const y0 = Math.max(70, mapBounds.y0 + 10);
-      const y1 = Math.min(settings.height - 120, mapBounds.y1 + 110);
-      let cursor = y0;
-      const totalHeight = boxes.reduce((sum, b) => sum + b.textHeight + labelGap, 0);
-      const spare = Math.max(0, (y1 - y0) - totalHeight);
-      cursor += spare / 2;
-      return boxes.map((box, i) => {
-        const y = cursor;
-        cursor += box.textHeight + labelGap;
-        return {
-          side,
-          x: side === "left" ? mapBounds.x0 - margin : mapBounds.x1 + margin,
-          y,
-          box
-        };
-      });
+      return createVerticalSlots(items, boxes, side, settings, mapBounds);
     }
 
     return createHorizontalSlots(items, boxes, side, settings, mapBounds);
@@ -823,6 +1249,7 @@
           lineHeight: slot.box.lineHeight,
           textWidth: slot.box.textWidth,
           textHeight: slot.box.textHeight,
+          footnote: slot.box.footnote,
           anchor: side === "left" ? "end" : "start"
         });
       });
@@ -832,13 +1259,17 @@
   }
 
   function getLabelKey(row) {
+    return row.rowId ? `row:${row.rowId}` : getLegacyLabelKey(row);
+  }
+
+  function getLegacyLabelKey(row) {
     return `${cleanType(row.type)}|${row.name}`;
   }
 
   function applyManualLabelPositions(placed) {
     return placed.map((d, index) => {
       const key = getLabelKey(d);
-      const manual = manualLabelPositions[key];
+      const manual = manualLabelPositions[key] || manualLabelPositions[getLegacyLabelKey(d)];
       return {
         ...d,
         layoutId: `label-${index}`,
@@ -850,16 +1281,30 @@
   }
 
   function lineEnd(d) {
-    if (d.labelSide === "left") return { x: d.labelX + 8, y: d.labelY + d.textHeight / 2 };
-    if (d.labelSide === "right") return { x: d.labelX - 8, y: d.labelY + d.textHeight / 2 };
-    if (d.labelSide === "top") return { x: d.labelX + d.textWidth / 2, y: d.labelY + d.textHeight + 8 };
-    return { x: d.labelX + d.textWidth / 2, y: d.labelY - 8 };
+    const box = labelVisualBox(d);
+    if (d.labelSide === "left") return { x: box.x1 + 8, y: box.centerY };
+    if (d.labelSide === "right") return { x: box.x0 - 8, y: box.centerY };
+    if (d.labelSide === "top") return { x: box.centerX, y: box.y1 + 8 };
+    return { x: box.centerX, y: box.y0 - 8 };
+  }
+
+  function labelVisualBox(d, pad = 0) {
+    const x = d.labelSide === "left" ? d.labelX - d.textWidth : d.labelX;
+    const y = d.labelY - labelFontSize(d);
+    const width = d.textWidth;
+    const height = labelVisualHeight(d);
+    return {
+      x0: x - pad,
+      y0: y - pad,
+      x1: x + width + pad,
+      y1: y + height + pad,
+      centerX: x + width / 2,
+      centerY: y + height / 2
+    };
   }
 
   function labelRect(d) {
-    const pad = 3;
-    const x = d.labelSide === "left" ? d.labelX - d.textWidth : d.labelX;
-    return { x0: x - pad, y0: d.labelY - d.lineHeight - pad, x1: x + d.textWidth + pad, y1: d.labelY + d.textHeight + pad };
+    return labelVisualBox(d, 10);
   }
 
   function segmentsCross(a, b, c, d) {
@@ -876,7 +1321,9 @@
   function analyzeLayout(placed, settings, projectedProblems, hiddenRegionProblems, mapBounds) {
     let crossings = 0;
     let overlaps = 0;
-    const lines = placed.map(d => ({ start: { x: d.x, y: d.y }, end: lineEnd(d), d }));
+    const lines = placed
+      .filter(d => !d.hideLine)
+      .map(d => ({ start: { x: d.x, y: d.y }, end: lineEnd(d), d }));
     const rects = placed.map(labelRect);
 
     for (let i = 0; i < lines.length; i++) {
@@ -932,9 +1379,11 @@
     const checklist = [];
     const emptyCategories = getEmptyCategoryLabels(rows);
     const pngMegapixels = settings.width * settings.height * 4 / 1000000;
+    const boundaryLabel = (boundarySources[currentBoundary] || boundarySources.canada).label;
+    const regionNoun = currentBoundary === "canada" ? "provinces or territories" : "regions";
 
     checklist.push(geoLoaded
-      ? checklistItem("ok", "Map boundary loaded", "Canada boundary data is available.")
+      ? checklistItem("ok", "Map boundary loaded", `${boundaryLabel} boundary data is available.`)
       : checklistItem("danger", "Map boundary missing", "Check internet access or host the GeoJSON locally."));
 
     checklist.push(rows.length
@@ -946,7 +1395,7 @@
       : checklistItem("ok", "Coordinates complete", "All project rows have longitude and latitude."));
 
     checklist.push(report.hiddenRegionProblems.length
-      ? checklistItem("warning", "Hidden points", `${report.hiddenRegionProblems.length} project(s) are in unselected provinces or territories.`)
+      ? checklistItem("warning", "Hidden points", `${report.hiddenRegionProblems.length} project(s) are in unselected ${regionNoun}.`)
       : checklistItem("ok", "No hidden points", "Selected regions include all mapped project points."));
 
     checklist.push(report.projectedProblems.length
@@ -1054,6 +1503,21 @@
     render();
   }
 
+  function switchDataTable(tableName) {
+    const showRegions = tableName === "regions";
+    els.projectTableTab.classList.toggle("is-active", !showRegions);
+    els.regionTableTab.classList.toggle("is-active", showRegions);
+    els.projectTableTab.setAttribute("aria-selected", String(!showRegions));
+    els.regionTableTab.setAttribute("aria-selected", String(showRegions));
+    els.projectTablePane.classList.toggle("is-active", !showRegions);
+    els.regionTablePane.classList.toggle("is-active", showRegions);
+    document.querySelectorAll(".table-actions").forEach(actions => {
+      actions.classList.toggle("is-active", actions.dataset.tableActions === (showRegions ? "regions" : "projects"));
+    });
+    els.tablePanelTitle.textContent = showRegions ? "Map regions" : "Project table";
+    if (showRegions) renderRegionValueTable();
+  }
+
   function render() {
     const settings = getSettings();
     const rows = getRows();
@@ -1064,33 +1528,35 @@
     svg.attr("height", settings.height);
 
     svg.append("title").text(settings.title || "Custom map");
-    svg.append("desc").text("A Canada map with outside labels, leader lines and markers generated from CSV data.");
+    svg.append("desc").text(`${(boundarySources[currentBoundary] || boundarySources.canada).label} map with outside labels, leader lines and markers generated from CSV data.`);
 
     if (settings.title) {
       svg.append("text")
         .attr("class", "map-title")
         .attr("x", 30)
         .attr("y", 42)
+        .attr("font-family", settings.fontFamily)
         .text(settings.title);
     }
 
     if (!canadaGeo) {
       drawMissingMapMessage(svg, settings);
       updateStatus(rows, [], [], { crossings: 0, overlaps: 0, longLines: 0, projectedProblems: [], hiddenRegionProblems: [] }, false);
+      if (!els.regionTableBody.contains(document.activeElement)) renderRegionValueTable();
       return;
     }
 
     const visibleGeo = getVisibleGeo();
     if (!visibleGeo || !visibleGeo.features.length) {
-      drawMissingMapMessage(svg, settings, "No provinces or territories selected", "Select at least one province or territory to draw the map.");
+      const title = currentBoundary === "canada" ? "No provinces or territories selected" : "No regions selected";
+      const message = currentBoundary === "canada" ? "Select at least one province or territory to draw the map." : "Select at least one region to draw the map.";
+      drawMissingMapMessage(svg, settings, title, message);
       updateStatus(rows, [], [], { crossings: 0, overlaps: 0, longLines: 0, projectedProblems: [], hiddenRegionProblems: [] }, true);
+      if (!els.regionTableBody.contains(document.activeElement)) renderRegionValueTable();
       return;
     }
 
-    const projection = d3.geoConicConformal()
-      .parallels([49, 77])
-      .rotate([96, 0])
-      .fitExtent([[settings.width * 0.09, settings.height * 0.07], [settings.width * 0.91, settings.height * 0.78]], visibleGeo);
+    const projection = createProjection(visibleGeo, settings);
 
     const path = d3.geoPath(projection);
     const mapBoundsArray = path.bounds(visibleGeo);
@@ -1122,25 +1588,29 @@
       }
       const hiddenRegion = getHiddenRegionForPoint(Number(row.lon), Number(row.lat));
       if (hiddenRegion) {
-        hiddenRegionProblems.push(`${row.name} (${hiddenRegion})`);
+        hiddenRegionProblems.push(`${row.name || "Unnamed point"} (${hiddenRegion})`);
         return;
       }
       const projected = projection([Number(row.lon), Number(row.lat)]);
       if (!projected || !Number.isFinite(projected[0]) || !Number.isFinite(projected[1])) {
-        projectedProblems.push(row.name);
+        projectedProblems.push(row.name || "Unnamed point");
         return;
       }
       mappedRows.push({ ...row, x: projected[0], y: projected[1] });
     });
 
-    const placed = layoutLabels(mappedRows, settings, mapBounds);
+    const labelRows = mappedRows.filter(row => row.name);
+    const placed = layoutLabels(labelRows, settings, mapBounds);
+    const placedByRowId = new Map(placed.map(row => [row.rowId, row]));
+    const markerRows = mappedRows.map(row => placedByRowId.get(row.rowId) || row);
+    const leaderRows = placed.filter(row => !row.hideLine);
     const report = analyzeLayout(placed, settings, projectedProblems, hiddenRegionProblems, mapBounds);
     lastLayout = { placed, settings, report };
 
     const leaderLayer = svg.append("g").attr("class", "leader-layer");
     if (settings.showLineCasing) {
     leaderLayer.selectAll("path.leader-casing")
-        .data(placed)
+        .data(leaderRows)
         .join("path")
         .attr("class", "leader-casing")
         .attr("data-layout-id", d => d.layoutId)
@@ -1148,7 +1618,7 @@
         .attr("d", d => linePath(d));
     }
     leaderLayer.selectAll("path.leader-line")
-      .data(placed)
+      .data(leaderRows)
       .join("path")
       .attr("class", "leader-line")
       .attr("data-layout-id", d => d.layoutId)
@@ -1157,17 +1627,27 @@
 
     const markerLayer = svg.append("g").attr("class", "marker-layer");
     const markers = markerLayer.selectAll(".marker")
-      .data(placed)
+      .data(markerRows)
       .join(function (enter) {
         return enter.append(d => createMarkerElement(getCategory(d.type).shape));
       })
-      .attr("class", d => `marker marker-${cleanType(d.type)}`)
+      .attr("class", d => `marker marker-${cleanType(d.type)}${settings.lockMarkerCoordinates ? " is-locked" : ""}`)
       .attr("fill", d => getCategory(d.type).colour)
       .attr("stroke", d => getCategory(d.type).stroke)
       .each(function (d) {
         moveMarkerNode(d3.select(this), d, { markerSize: getCategoryMarkerSize(getCategory(d.type), settings) });
       });
-    attachMarkerDragging(markers, projection, settings);
+    if (!settings.lockMarkerCoordinates) attachMarkerDragging(markers, projection, settings);
+
+    const labelBackgroundLayer = svg.append("g").attr("class", "label-background-layer");
+    labelBackgroundLayer.selectAll("rect")
+      .data(placed)
+      .join("rect")
+      .attr("class", "map-label-background")
+      .attr("data-layout-id", d => d.layoutId)
+      .each(function (d) {
+        positionLabelBackground(d3.select(this), d);
+      });
 
     const labelLayer = svg.append("g").attr("class", "label-layer");
     const labels = labelLayer.selectAll("text")
@@ -1175,6 +1655,7 @@
       .join("text")
       .attr("class", "map-label")
       .attr("font-size", settings.labelSize)
+      .attr("font-family", settings.fontFamily)
       .attr("data-layout-id", d => d.layoutId)
       .attr("x", d => d.labelX)
       .attr("y", d => d.labelY)
@@ -1184,9 +1665,11 @@
       const text = d3.select(this);
       d.lines.forEach((line, i) => {
         text.append("tspan")
+          .attr("class", "label-line")
           .attr("x", d.labelX)
           .attr("dy", i === 0 ? 0 : d.lineHeight)
           .text(line);
+        if (i === d.lines.length - 1 && d.footnote) appendSuperscript(text, d.footnote, settings.labelSize);
       });
     });
     attachLabelDragging(labels);
@@ -1194,6 +1677,16 @@
     if (settings.showCallouts && calloutRows.length) drawCallouts(svg, calloutRows, settings, mapBounds);
     if (settings.showLegend) drawLegend(svg, settings);
     updateStatus(rows, mappedRows, calloutRows, report, true);
+    if (!els.regionTableBody.contains(document.activeElement)) renderRegionValueTable();
+  }
+
+  function appendSuperscript(textSelection, value, labelSize) {
+    textSelection.append("tspan")
+      .attr("class", "label-footnote")
+      .attr("dx", 2)
+      .attr("baseline-shift", "super")
+      .attr("font-size", labelSize * 0.68)
+      .text(value);
   }
 
   function attachLabelDragging(labels) {
@@ -1209,7 +1702,10 @@
         const label = d3.select(this)
           .attr("x", d.labelX)
           .attr("y", d.labelY);
-        label.selectAll("tspan").attr("x", d.labelX);
+        label.selectAll("tspan.label-line").attr("x", d.labelX);
+
+        d3.select(`rect.map-label-background[data-layout-id="${d.layoutId}"]`)
+          .call(node => positionLabelBackground(node, d));
 
         d3.selectAll(`path[data-layout-id="${d.layoutId}"]`)
           .attr("d", linePath(d));
@@ -1250,6 +1746,17 @@
         d.lat = lat;
         setStatusMessage(`Updated coordinates for ${d.name}.`, "ok");
       }));
+  }
+
+  function positionLabelBackground(node, d) {
+    const padX = 8;
+    const padY = 5;
+    const box = labelVisualBox(d);
+
+    node.attr("x", box.x0 - padX)
+      .attr("y", box.y0 - padY)
+      .attr("width", box.x1 - box.x0 + padX * 2)
+      .attr("height", box.y1 - box.y0 + padY * 2);
   }
 
   function moveMarkerNode(node, d, settings) {
@@ -1294,6 +1801,7 @@
     const rowIndex = getTableRows().indexOf(tr);
     let fieldIndex = -1;
     if (active.classList.contains("name-input")) fieldIndex = tableFields.indexOf("name");
+    if (active.classList.contains("footnote-input")) fieldIndex = tableFields.indexOf("footnote");
     if (active.classList.contains("type-input")) fieldIndex = tableFields.indexOf("type");
     if (active.classList.contains("lon-input")) fieldIndex = tableFields.indexOf("lon");
     if (active.classList.contains("lat-input")) fieldIndex = tableFields.indexOf("lat");
@@ -1306,11 +1814,86 @@
     const cleaned = String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n").replace(/\n$/, "");
     if (!cleaned.trim()) return [];
     if (window.Papa) return Papa.parse(cleaned, { delimiter: "\t" }).data;
-    return cleaned.split("\n").map(row => row.split("\t"));
+    return parseDelimitedText(cleaned, "\t").data;
+  }
+
+  function parseDelimitedText(text, delimiter = ",") {
+    const source = String(text || "").replace(/^\ufeff/, "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+    const rows = [];
+    const errors = [];
+    let row = [];
+    let field = "";
+    let inQuotes = false;
+
+    for (let index = 0; index < source.length; index += 1) {
+      const char = source[index];
+      const next = source[index + 1];
+
+      if (char === '"') {
+        if (inQuotes && next === '"') {
+          field += '"';
+          index += 1;
+        } else {
+          inQuotes = !inQuotes;
+        }
+        continue;
+      }
+
+      if (!inQuotes && char === delimiter) {
+        row.push(field);
+        field = "";
+        continue;
+      }
+
+      if (!inQuotes && char === "\n") {
+        row.push(field);
+        rows.push(row);
+        row = [];
+        field = "";
+        continue;
+      }
+
+      field += char;
+    }
+
+    if (inQuotes) errors.push({ row: rows.length, message: "Unclosed quoted value." });
+    row.push(field);
+    if (row.some(value => String(value).length > 0) || rows.length === 0) rows.push(row);
+
+    return { data: rows, errors };
+  }
+
+  function parseCsvText(text) {
+    const parsed = parseDelimitedText(text, ",");
+    const records = parsed.data.filter(row => row.some(value => String(value || "").trim() !== ""));
+    const fields = records.length ? records[0].map(value => String(value || "").trim()) : [];
+    const data = records.slice(1).map(record => {
+      const row = {};
+      fields.forEach((field, index) => {
+        row[field] = record[index] === undefined ? "" : record[index];
+      });
+      if (record.length > fields.length) row.__parsed_extra = record.slice(fields.length);
+      return row;
+    });
+    return { data, errors: parsed.errors, meta: { fields } };
+  }
+
+  function csvEscape(value) {
+    const text = String(value === null || value === undefined ? "" : value);
+    return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  }
+
+  function unparseCsvRows(rows, columns) {
+    const lines = [
+      columns.map(csvEscape).join(","),
+      ...rows.map(row => columns.map(column => csvEscape(row[column])).join(","))
+    ];
+    return lines.join("\r\n");
   }
 
   function setTableField(tr, field, value) {
     if (field === "name") tr.querySelector(".name-input").value = String(value || "").trim();
+    if (field === "footnote") tr.querySelector(".footnote-input").value = normalizeFootnote(value);
     if (field === "type") tr.querySelector(".type-input").value = cleanType(value);
     if (field === "lon") tr.querySelector(".lon-input").value = toNumber(value);
     if (field === "lat") tr.querySelector(".lat-input").value = toNumber(value);
@@ -1343,6 +1926,7 @@
     const firstPastedRow = tableRows[start.rowIndex];
     if (firstPastedRow) firstPastedRow.scrollIntoView({ block: "nearest", behavior: "smooth" });
     manualLabelPositions = {};
+    refreshRegionColoursFromRows();
     render();
     setStatusMessage(`Pasted ${pastedRows.length} row(s) into the project table.`, "ok");
   }
@@ -1384,6 +1968,12 @@
       const colour = savedCategory.colour || "#217346";
       const markerSize = optionalNumber(savedCategory.markerSize) || getSettings().markerSize;
       const lineWidth = optionalNumber(savedCategory.lineWidth) || getSettings().lineWidth;
+      const markerSizeCustom = savedCategory.markerSizeCustom !== undefined
+        ? Boolean(savedCategory.markerSizeCustom)
+        : markerSize !== getSettings().markerSize;
+      const lineWidthCustom = savedCategory.lineWidthCustom !== undefined
+        ? Boolean(savedCategory.lineWidthCustom)
+        : lineWidth !== getSettings().lineWidth;
 
       if (category) {
         category.label = label;
@@ -1391,6 +1981,8 @@
         category.colour = colour;
         category.markerSize = markerSize;
         category.lineWidth = lineWidth;
+        category.markerSizeCustom = markerSizeCustom;
+        category.lineWidthCustom = lineWidthCustom;
         category.collapsed = Boolean(savedCategory.collapsed);
         nextCategories.push(category);
         return;
@@ -1405,6 +1997,8 @@
         stroke: "#ffffff",
         markerSize,
         lineWidth,
+        markerSizeCustom,
+        lineWidthCustom,
         collapsed: Boolean(savedCategory.collapsed),
         removable: true
       });
@@ -1425,9 +2019,33 @@
       const editor = event.target.closest(".category-editor");
       editor.querySelector(".category-colour-input").value = event.target.value;
     }
+    if (event && (event.target.classList.contains("category-marker-size-input") || event.target.classList.contains("category-line-width-input"))) {
+      const editor = event.target.closest(".category-editor");
+      const category = editor ? categorySettings.find(item => item.id === editor.dataset.categoryId) : null;
+      if (category && event.target.classList.contains("category-marker-size-input")) category.markerSizeCustom = true;
+      if (category && event.target.classList.contains("category-line-width-input")) category.lineWidthCustom = true;
+    }
     syncCategorySettingsFromControls();
     updateTypeOptions();
     render();
+  }
+
+  function handleLayoutSettingsChange(event) {
+    if (event && (event.target === els.markerSizeInput || event.target === els.lineWidthInput)) {
+      syncDefaultCategorySizes();
+    }
+    renderCategoryEditors();
+    render();
+  }
+
+  function resetLayoutInputToDefault(button) {
+    const inputId = button && button.dataset ? button.dataset.resetInput : "";
+    const input = inputId ? document.querySelector(`#${inputId}`) : null;
+    if (!input || !Object.prototype.hasOwnProperty.call(layoutDefaults, inputId)) return;
+
+    input.value = layoutDefaults[inputId];
+    handleLayoutSettingsChange({ target: input });
+    input.focus();
   }
 
   function addCategory() {
@@ -1442,6 +2060,8 @@
       stroke: "#ffffff",
       markerSize: getSettings().markerSize,
       lineWidth: getSettings().lineWidth,
+      markerSizeCustom: false,
+      lineWidthCustom: false,
       collapsed: false,
       removable: true
     });
@@ -1532,7 +2152,8 @@
 
   function drawLegend(svg, settings) {
     const rowHeight = 40;
-    const dimensions = { width: 430, height: 34 + categorySettings.length * rowHeight };
+    const verticalPadding = 18;
+    const dimensions = { width: 430, height: verticalPadding * 2 + categorySettings.length * rowHeight };
     const position = getBoxPosition("legend", { x: 40, y: settings.height - 150 }, dimensions, settings);
     const group = svg.append("g")
       .attr("class", "legend-layer movable-map-box")
@@ -1547,14 +2168,17 @@
       .attr("rx", 18);
 
     categorySettings.forEach((category, index) => {
-      const itemY = 36 + index * rowHeight;
+      const itemY = verticalPadding + index * rowHeight + rowHeight / 2;
       const legendMarkerSize = Math.max(8, Math.min(18, getCategoryMarkerSize(category, settings)));
-      drawMarkerSymbol(group, category, 48, itemY - 8, legendMarkerSize);
+      drawMarkerSymbol(group, category, 54, itemY, legendMarkerSize);
       group.append("text")
         .attr("class", "legend-text")
-        .attr("x", 85)
+        .attr("x", 86)
         .attr("y", itemY)
         .attr("font-size", 22)
+        .attr("font-family", settings.fontFamily)
+        .attr("text-anchor", "start")
+        .attr("dominant-baseline", "middle")
         .text(category.label);
     });
 
@@ -1585,17 +2209,21 @@
       const category = getCategory(row.type);
       const calloutMarkerSize = Math.max(7, Math.min(14, getCategoryMarkerSize(category, settings)));
       drawMarkerSymbol(group, category, 34, itemY - 6, calloutMarkerSize);
-      group.append("text")
+      const calloutText = group.append("text")
         .attr("class", "callout-text")
         .attr("x", 62)
         .attr("y", itemY)
         .attr("font-size", settings.labelSize)
+        .attr("font-family", settings.fontFamily)
         .text(row.name);
+      const footnote = getRenderableFootnote(row.footnote);
+      if (footnote) appendSuperscript(calloutText, footnote, settings.labelSize);
       group.append("text")
         .attr("class", "legend-note")
         .attr("x", 62)
         .attr("y", itemY + 18)
         .attr("font-size", settings.labelSize - 2)
+        .attr("font-family", settings.fontFamily)
         .text("Canada-wide, not shown on map");
     });
 
@@ -1680,7 +2308,7 @@
     return `M${points.join(" L")} Z`;
   }
 
-  function drawMissingMapMessage(svg, settings, title = "Map boundary could not load", message = "The app loads the Canada GeoJSON boundary from a public GitHub raw URL. Check network access or host the file locally.") {
+  function drawMissingMapMessage(svg, settings, title = "Map boundary could not load", message = "The app could not load the online or local GeoJSON boundary file. Check network access and the assets folder.") {
     svg.append("rect")
       .attr("x", 30)
       .attr("y", 70)
@@ -1718,6 +2346,16 @@
     return value || fallback;
   }
 
+  function quoteFontFamily(fontFamily) {
+    return String(fontFamily || "Lato, Arial, Helvetica, sans-serif")
+      .split(",")
+      .map(font => {
+        const trimmed = font.trim();
+        return /\s/.test(trimmed) && !/^["'].*["']$/.test(trimmed) ? `"${trimmed}"` : trimmed;
+      })
+      .join(", ");
+  }
+
   function getExportCss() {
     const mapBackground = getCssVar("--map-background", "#ffffff");
     const mapBoundary = getCssVar("--map-boundary", "#ffffff");
@@ -1725,18 +2363,21 @@
     const ink = getCssVar("--ink", "#222222");
     const muted = getCssVar("--muted", "#666666");
     const leader = getCssVar("--leader", "#333333");
+    const fontFamily = quoteFontFamily(getSettings().fontFamily);
 
     return `
       #mapSvg { background: ${mapBackground}; }
-      .map-title { font-size: 24px; font-weight: 700; fill: ${ink}; font-family: Arial, Helvetica, sans-serif; }
+      .map-title { font-size: 24px; font-weight: 700; fill: ${ink}; font-family: ${fontFamily}; }
       .province { stroke: ${mapBoundary}; stroke-width: 1.2; }
       .marker { stroke-width: 2.2; }
       .leader-casing { fill: none; stroke: ${mapBackground}; stroke-linecap: round; stroke-linejoin: round; }
       .leader-line { fill: none; stroke: ${leader}; stroke-linecap: round; stroke-linejoin: round; }
-      .map-label { font-family: Arial, Helvetica, sans-serif; font-weight: 700; fill: ${ink}; }
+      .map-label-background { fill: #ffffff; stroke: none; }
+      .map-label { font-family: ${fontFamily}; font-weight: 700; fill: ${ink}; }
+      .label-footnote { font-weight: 700; }
       .callout-box, .legend-box { fill: ${mapBackground}; stroke: ${mapBoxBorder}; stroke-width: 1.5; }
-      .callout-text, .legend-text { font-family: Arial, Helvetica, sans-serif; fill: ${ink}; font-weight: 700; }
-      .legend-note { font-family: Arial, Helvetica, sans-serif; fill: ${muted}; font-style: italic; }
+      .callout-text, .legend-text { font-family: ${fontFamily}; fill: ${ink}; font-weight: 700; }
+      .legend-note { font-family: ${fontFamily}; fill: ${muted}; font-style: italic; }
     `;
   }
 
@@ -1825,18 +2466,23 @@
     const rows = getRows();
     const exportRows = rows.map(row => ({
       name: row.name,
+      footnote: row.footnote,
       type: getCategoryLabel(row.type),
       lon: row.lon,
-      lat: row.lat
+      lat: row.lat,
+      hideLine: row.hideLine ? "yes" : ""
     }));
-    const csv = "\ufeff" + Papa.unparse(exportRows, { columns: ["name", "type", "lon", "lat"] });
+    const columns = ["name", "footnote", "type", "lon", "lat", "hideLine"];
+    const csvBody = window.Papa ? Papa.unparse(exportRows, { columns }) : unparseCsvRows(exportRows, columns);
+    const csv = "\ufeff" + csvBody;
     download("custom-map-data.csv", csv, "text/csv;charset=utf-8");
   }
 
   function saveProject() {
     const project = {
-      version: 1,
+      version: 3,
       savedAt: new Date().toISOString(),
+      boundary: currentBoundary,
       mapStyle: currentMapStylePreset,
       settings: getSettings(),
       categories: categorySettings.map(category => ({
@@ -1846,16 +2492,23 @@
         colour: category.colour,
         markerSize: category.markerSize,
         lineWidth: category.lineWidth,
+        markerSizeCustom: Boolean(category.markerSizeCustom),
+        lineWidthCustom: Boolean(category.lineWidthCustom),
         collapsed: category.collapsed
       })),
       rows: getRows().map(row => ({
+        rowId: row.rowId,
         name: row.name,
+        footnote: row.footnote,
         type: cleanType(row.type),
         lon: row.lon,
-        lat: row.lat
+        lat: row.lat,
+        hideLine: row.hideLine
       })),
       regionVisibility,
       regionFills,
+      regionColourOverrides,
+      regionValues,
       manualLabelPositions,
       manualBoxPositions
     };
@@ -1866,20 +2519,24 @@
 
   function loadProject(file) {
     const reader = new FileReader();
-    reader.onload = function () {
+    reader.onload = async function () {
       try {
         const project = JSON.parse(String(reader.result || "{}"));
         if (!project || !Array.isArray(project.rows)) throw new Error("Project file is missing rows.");
 
+        currentBoundary = Object.prototype.hasOwnProperty.call(boundarySources, project.boundary) ? project.boundary : "canada";
+        els.boundaryInput.value = currentBoundary;
         applyMapStylePreset(project.mapStyle || "goc-green", { applyMapColours: false, render: false });
         applySettings(project.settings || {});
         applyCategorySettings(project.categories || []);
         regionVisibility = project.regionVisibility || {};
         regionFills = project.regionFills || {};
-        setRows(project.rows);
+        regionColourOverrides = project.regionColourOverrides || {};
+        regionValues = project.regionValues || {};
         manualLabelPositions = project.manualLabelPositions || {};
         manualBoxPositions = project.manualBoxPositions || {};
-        initializeRegionVisibility();
+        setRows(project.rows, [], { preserveManualPositions: true, render: false });
+        await loadGeo();
         renderRegionControls();
         render();
         setStatusMessage(`Loaded project with ${project.rows.length} row(s).`, "ok");
@@ -1894,19 +2551,40 @@
   }
 
   function importCsv(file) {
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: results => {
-        const report = validateCsvImport(results);
+    if (window.Papa) {
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: results => {
+          const report = validateCsvImport(results);
+          pendingCsvImport = { ...report, fileName: file && file.name ? file.name : "Selected CSV" };
+          showCsvImportPreview(pendingCsvImport);
+        },
+        error: err => {
+          pendingCsvImport = null;
+          setStatusMessage(`CSV import failed: ${err.message || String(err)}`, "danger");
+        }
+      });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = function () {
+      try {
+        const report = validateCsvImport(parseCsvText(String(reader.result || "")));
+        report.messages.unshift("Papa Parse did not load, so CarteData used its built-in CSV parser. Review quoted fields before importing.");
         pendingCsvImport = { ...report, fileName: file && file.name ? file.name : "Selected CSV" };
         showCsvImportPreview(pendingCsvImport);
-      },
-      error: err => {
+      } catch (error) {
         pendingCsvImport = null;
-        setStatusMessage(`CSV import failed: ${err.message || String(err)}`, "danger");
+        setStatusMessage(`CSV import failed: ${error.message || String(error)}`, "danger");
       }
-    });
+    };
+    reader.onerror = function () {
+      pendingCsvImport = null;
+      setStatusMessage("CSV import failed: the browser could not read the selected file.", "danger");
+    };
+    reader.readAsText(file);
   }
 
   function validateCsvImport(results) {
@@ -1915,7 +2593,7 @@
     const fields = sourceFields.map(normalizeHeader);
     const hasColumn = aliases => aliases.some(alias => fields.includes(alias));
 
-    if (!hasColumn(csvColumnAliases.name)) messages.push("CSV is missing a project name column. Accepted headers: name, project, project name.");
+    if (!hasColumn(csvColumnAliases.name)) messages.push("CSV is missing a project name column. Point labels will be blank unless names are added in the table.");
     if (!hasColumn(csvColumnAliases.type)) messages.push(`CSV is missing a type column. Blank or missing types are imported as ${getDefaultCategory().label}.`);
     if (!hasColumn(csvColumnAliases.lon)) messages.push("CSV is missing a longitude column. Rows without longitude become callouts.");
     if (!hasColumn(csvColumnAliases.lat)) messages.push("CSV is missing a latitude column. Rows without latitude become callouts.");
@@ -1932,13 +2610,13 @@
       }
 
       const row = normalizeRow(rawRow);
-      if (!row.name) {
-        messages.push(`CSV row ${index + 2}: skipped because project name is blank.`);
-        return;
-      }
-
       const hasLon = row.lon !== "";
       const hasLat = row.lat !== "";
+      if (!row.name && !hasLon && !hasLat) return;
+      if (row.footnote && !getRenderableFootnote(row.footnote)) {
+        messages.push(`CSV row ${index + 2}: footnote must contain only letters and numbers to appear as superscript.`);
+      }
+      if (!row.name && hasLon && hasLat) messages.push(`CSV row ${index + 2}: name is blank, so only the marker dot will be shown.`);
       if (hasLon !== hasLat) {
         messages.push(`CSV row ${index + 2}: only one coordinate is filled in. It will be treated as a callout unless both lon and lat are provided.`);
       }
@@ -1963,7 +2641,7 @@
   }
 
   function initEvents() {
-    els.loadSampleBtn.addEventListener("click", () => setRows(sampleRows));
+    if (els.loadSampleBtn) els.loadSampleBtn.addEventListener("click", () => setRows(sampleRows));
     els.ribbonLoadSampleBtn.addEventListener("click", () => setRows(sampleRows));
     els.ribbonOpenProjectBtn.addEventListener("click", () => els.projectInput.click());
     els.ribbonSaveProjectBtn.addEventListener("click", saveProject);
@@ -1993,14 +2671,23 @@
       window.setTimeout(() => {
         selectedRows.forEach(tr => tr.remove());
         updateDeleteButtonState();
+        refreshRegionColoursFromRows();
         render();
       }, 260);
     });
     els.renderBtn.addEventListener("click", autoPlaceLabels);
-    els.downloadCsvBtn.addEventListener("click", exportCsv);
-    els.saveProjectBtn.addEventListener("click", saveProject);
-    els.exportSvgBtn.addEventListener("click", exportSvg);
-    els.exportPngBtn.addEventListener("click", exportPng);
+    if (els.downloadCsvBtn) els.downloadCsvBtn.addEventListener("click", exportCsv);
+    if (els.saveProjectBtn) els.saveProjectBtn.addEventListener("click", saveProject);
+    if (els.exportSvgBtn) els.exportSvgBtn.addEventListener("click", exportSvg);
+    if (els.exportPngBtn) els.exportPngBtn.addEventListener("click", exportPng);
+    els.projectTableTab.addEventListener("click", () => switchDataTable("projects"));
+    els.regionTableTab.addEventListener("click", () => switchDataTable("regions"));
+    if (els.updateRegionValuesBtn) els.updateRegionValuesBtn.addEventListener("click", () => updateRegionValuesFromProjectPoints({ selectRegions: true }));
+    els.applyRegionValueColoursBtn.addEventListener("click", () => {
+      applyRegionColoursByValue();
+      setStatusMessage("Applied region colours from the Map regions table.", "ok");
+    });
+    els.resetRegionValuesBtn.addEventListener("click", resetRegionValues);
     els.csvInput.addEventListener("change", e => {
       const file = e.target.files && e.target.files[0];
       if (file) importCsv(file);
@@ -2013,6 +2700,10 @@
     });
     els.statusBox.addEventListener("click", handleStatusAction);
     document.querySelector("#projectTable").addEventListener("paste", pasteIntoTable);
+    document.addEventListener("click", event => {
+      const resetButton = event.target.closest(".reset-default-btn");
+      if (resetButton) resetLayoutInputToDefault(resetButton);
+    });
     [
       els.mapTitleInput,
       els.widthInput,
@@ -2021,13 +2712,12 @@
       els.markerSizeInput,
       els.lineWidthInput,
       els.labelCharsInput,
+      els.fontFamilyInput,
       els.showLegendInput,
       els.showCalloutsInput,
-      els.showLineCasingInput
-    ].forEach(el => el.addEventListener("change", () => {
-      renderCategoryEditors();
-      render();
-    }));
+      els.showLineCasingInput,
+      els.lockMarkerCoordinatesInput
+    ].filter(Boolean).forEach(el => el.addEventListener("change", handleLayoutSettingsChange));
     els.addCategoryBtn.addEventListener("click", addCategory);
     els.categoryList.addEventListener("change", handleCategorySettingsChange);
     els.categoryList.addEventListener("input", debounce(handleCategorySettingsChange, 250));
@@ -2041,26 +2731,57 @@
       const toggleButton = event.target.closest(".toggle-category-btn");
       if (toggleButton) toggleCategory(toggleButton.dataset.categoryId);
     });
-    els.regionList.addEventListener("change", event => {
-      if (event.target.classList.contains("region-input")) {
-        regionVisibility[event.target.value] = event.target.checked;
+    els.regionTableBody.addEventListener("change", event => {
+      if (event.target.classList.contains("region-table-included-input")) {
+        regionVisibility[event.target.dataset.regionId] = event.target.checked;
+        renderRegionControls();
         render();
         return;
       }
+
+      if (event.target.classList.contains("region-value-input")) {
+        const value = normalizeRegionValue(event.target.value);
+        if (value === "") {
+          delete regionValues[event.target.dataset.regionId];
+        } else {
+          regionValues[event.target.dataset.regionId] = value;
+        }
+        applyRegionColoursByValue();
+        return;
+      }
+
       if (event.target.classList.contains("region-colour-input")) {
+        regionColourOverrides[event.target.dataset.regionId] = true;
         regionFills[event.target.dataset.regionId] = event.target.value;
-        renderRegionControls();
+        renderRegionValueTable();
         render();
         return;
       }
-      if (event.target.classList.contains("region-colour-set-input") && event.target.value) {
-        regionFills[event.target.dataset.regionId] = event.target.value;
-        renderRegionControls();
-        render();
+
+      if (event.target.classList.contains("region-colour-set-input")) {
+        if (event.target.value) {
+          regionColourOverrides[event.target.dataset.regionId] = true;
+          regionFills[event.target.dataset.regionId] = event.target.value;
+          renderRegionValueTable();
+          render();
+          return;
+        }
+        delete regionColourOverrides[event.target.dataset.regionId];
+        applyRegionColoursByValue();
+        return;
       }
     });
     els.mapStylePresetInput.addEventListener("change", () => {
       applyMapStylePreset(els.mapStylePresetInput.value);
+    });
+    els.boundaryInput.addEventListener("change", async () => {
+      currentBoundary = Object.prototype.hasOwnProperty.call(boundarySources, els.boundaryInput.value) ? els.boundaryInput.value : "canada";
+      regionVisibility = {};
+      regionFills = {};
+      regionValues = {};
+      regionColourOverrides = {};
+      await loadGeo();
+      render();
     });
     els.regionPresetInput.addEventListener("change", () => {
       applyRegionPreset(els.regionPresetInput.value);
@@ -2073,22 +2794,100 @@
   }
 
   async function loadGeo() {
+    const source = boundarySources[currentBoundary] || boundarySources.canada;
     try {
-      const response = await fetch(geoUrl, { cache: "force-cache" });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      canadaGeo = await response.json();
+      canadaGeo = normalizeBoundaryGeoJson(await fetchGeoJsonWithFallback(source), source);
       initializeRegionVisibility();
-      renderRegionControls();
+      applyRegionColoursByValue(false);
     } catch (error) {
       canadaGeo = null;
       renderRegionControls();
-      console.warn("Could not load Canada GeoJSON", error);
+      console.warn(`Could not load ${source.label} GeoJSON`, error);
     }
+  }
+
+  function normalizeBoundaryGeoJson(geo, source) {
+    if (!geo || source.projection !== "canada") return geo;
+    return rewindGeoJsonForD3(geo);
+  }
+
+  function rewindGeoJsonForD3(geo) {
+    return {
+      ...geo,
+      features: Array.isArray(geo.features)
+        ? geo.features.map(feature => ({
+          ...feature,
+          geometry: rewindGeometryForD3(feature.geometry)
+        }))
+        : geo.features
+    };
+  }
+
+  function rewindGeometryForD3(geometry) {
+    if (!geometry || !geometry.coordinates) return geometry;
+    if (geometry.type === "Polygon") {
+      return {
+        ...geometry,
+        coordinates: rewindPolygonForD3(geometry.coordinates)
+      };
+    }
+    if (geometry.type === "MultiPolygon") {
+      return {
+        ...geometry,
+        coordinates: geometry.coordinates.map(rewindPolygonForD3)
+      };
+    }
+    return geometry;
+  }
+
+  function rewindPolygonForD3(rings) {
+    return rings.map((ring, index) => {
+      const area = planarRingArea(ring);
+      const shouldReverseExterior = index === 0 && area > 0;
+      const shouldReverseHole = index > 0 && area < 0;
+      return shouldReverseExterior || shouldReverseHole ? ring.slice().reverse() : ring.slice();
+    });
+  }
+
+  function planarRingArea(ring) {
+    if (!Array.isArray(ring) || ring.length < 4) return 0;
+    let area = 0;
+    for (let i = 0; i < ring.length - 1; i += 1) {
+      area += ring[i][0] * ring[i + 1][1] - ring[i + 1][0] * ring[i][1];
+    }
+    return area / 2;
+  }
+
+  async function fetchJson(url) {
+    const response = await fetch(url, { cache: "force-cache" });
+    if (!response.ok) throw new Error(`${url} returned HTTP ${response.status}`);
+    return response.json();
+  }
+
+  async function fetchGeoJsonWithFallback(source) {
+    const localBoundary = getLocalBoundary(source);
+    if (window.location.protocol === "file:" && localBoundary) {
+      return localBoundary;
+    }
+
+    try {
+      return await fetchJson(source.url);
+    } catch (onlineError) {
+      console.warn(`Could not load online ${source.label} GeoJSON. Trying local fallback.`, onlineError);
+      if (localBoundary) return localBoundary;
+      return fetchJson(source.fallbackUrl);
+    }
+  }
+
+  function getLocalBoundary(source) {
+    if (!window.CARTEDATA_LOCAL_BOUNDARIES || !source || !source.fallbackKey) return null;
+    return window.CARTEDATA_LOCAL_BOUNDARIES[source.fallbackKey] || null;
   }
 
   async function init() {
     renderRibbonIcons();
     initEvents();
+    els.boundaryInput.value = currentBoundary;
     renderMapStyleOptions();
     renderCategoryEditors();
     setRows(sampleRows);
