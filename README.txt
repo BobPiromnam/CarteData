@@ -1,8 +1,8 @@
-CarteData
+Plotypus
 
 What this is
 ------------
-CarteData is a local static web app for creating maps with project points, outside labels, leader lines, legend markers and region colour fills.
+Plotypus is a local static web app for creating maps with project points, outside labels, leader lines, legend markers and region colour fills.
 
 It is designed for non-technical users:
 1. Open index.html in Microsoft Edge.
@@ -55,7 +55,7 @@ The raw GeoJSON files are also included for reference or hosted use:
 - assets/canada-regions.geojson
 - assets/world-countries.geojson
 
-When opened from file://, CarteData uses the bundled local boundary data first. When served over http:// or https://, it tries the online boundary source first and falls back to bundled local boundary data if the online source is blocked.
+When opened from file://, Plotypus uses the bundled local boundary data first. When served over http:// or https://, it tries the online boundary source first and falls back to bundled local boundary data if the online source is blocked.
 
 The app still loads these online resources unless they are vendored locally:
 - D3 from jsDelivr

@@ -1,6 +1,6 @@
 (function () {
   if (!window.d3) {
-    const message = "CarteData could not start because D3 did not load. Check network access or vendor D3 locally before opening this file offline.";
+    const message = "Plotypus could not start because D3 did not load. Check network access or vendor D3 locally before opening this file offline.";
     const statusBox = document.querySelector("#statusBox");
     const mapSvg = document.querySelector("#mapSvg");
     if (statusBox) statusBox.innerHTML = `<div class="status-danger">${message}</div>`;
@@ -86,7 +86,7 @@
     lineWidthInput: 2,
     labelCharsInput: 26
   };
-  const activeTableStorageKey = "cartedata.activeTable";
+  const activeTableStorageKey = "plotypus.activeTable";
   const dataTableNames = ["projects", "regions", "preview"];
 
   const imageSizePresets = {
@@ -2812,7 +2812,7 @@
     reader.onload = function () {
       try {
         const report = validateCsvImport(parseCsvText(String(reader.result || "")));
-        report.messages.unshift("Papa Parse did not load, so CarteData used its built-in CSV parser. Review quoted fields before importing.");
+        report.messages.unshift("Papa Parse did not load, so Plotypus used its built-in CSV parser. Review quoted fields before importing.");
         pendingCsvImport = { ...report, fileName: file && file.name ? file.name : "Selected CSV" };
         showCsvImportPreview(pendingCsvImport);
       } catch (error) {
