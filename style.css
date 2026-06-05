@@ -1057,6 +1057,7 @@ td select:focus {
 .region-count-col,
 .region-value-col {
   width: 112px;
+  text-align: center;
 }
 
 .region-preset-col {
@@ -1076,6 +1077,7 @@ td select:focus {
 .line-cell,
 .select-cell,
 .region-included-cell,
+.region-value-cell,
 .region-count-cell {
   text-align: center;
   background: var(--surface);
@@ -1101,6 +1103,15 @@ td select:focus {
 .region-count-cell {
   padding: 4px 8px;
   font-variant-numeric: tabular-nums;
+}
+
+.region-value-cell {
+  padding: 4px 8px;
+}
+
+#regionTable .region-value-input {
+  width: 72px;
+  text-align: center;
 }
 
 #regionTable .region-colour-set-input {
@@ -1167,6 +1178,9 @@ td select:focus {
 }
 
 .map-host {
+  display: grid;
+  align-content: start;
+  justify-items: center;
   overflow: auto;
   background:
     linear-gradient(45deg, var(--workspace-grid) 25%, transparent 25%),
@@ -1179,7 +1193,8 @@ td select:focus {
 
 #mapSvg {
   display: block;
-  width: 100%;
+  width: auto;
+  max-width: 100%;
   height: auto;
   background: var(--map-background);
   box-shadow: 0 0 0 1px rgba(20, 35, 31, 0.08);

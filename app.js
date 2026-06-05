@@ -902,7 +902,7 @@
           <input class="region-table-included-input" type="checkbox" data-region-id="${escapeHtml(region.id)}" aria-label="Include ${escapeHtml(region.name)}"${region.included ? " checked" : ""}>
         </td>
         <td class="region-count-cell">${region.count}</td>
-        <td>
+        <td class="region-value-cell">
           <input class="region-value-input" type="number" step="any" value="${region.value === "" ? "" : region.value}" data-region-id="${escapeHtml(region.id)}" aria-label="${escapeHtml(region.name)} colour order">
         </td>
         <td>
