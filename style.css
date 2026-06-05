@@ -37,7 +37,7 @@ html {
 
 body {
   margin: 0;
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: Lato;
   background:
     linear-gradient(180deg, #f8faf9 0, var(--bg) 260px);
   color: var(--ink);
@@ -772,8 +772,7 @@ input[type="file"] {
 
 .workspace {
   display: grid;
-  grid-template-rows: minmax(260px, 30vh) minmax(560px, 1fr);
-  gap: 16px;
+  grid-template-rows: minmax(760px, 1fr);
 }
 
 .table-panel {
@@ -867,6 +866,18 @@ input[type="file"] {
 .region-management-panel.is-active {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
+}
+
+.preview-table-pane.is-active {
+  display: grid;
+}
+
+.preview-table-pane .preview-panel {
+  min-height: 0;
+  height: 100%;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .region-management-controls {
@@ -1048,20 +1059,12 @@ td select:focus {
   width: 112px;
 }
 
-.region-source-col {
-  width: 120px;
-}
-
 .region-preset-col {
   width: 138px;
 }
 
-.region-custom-col {
-  width: 112px;
-}
-
 .region-fill-col {
-  width: 132px;
+  width: 150px;
 }
 
 .footnote-input {
@@ -1100,24 +1103,17 @@ td select:focus {
   font-variant-numeric: tabular-nums;
 }
 
-.region-source-cell {
-  padding: 4px 8px;
-  color: var(--muted);
-  font-size: 12px;
-  background: var(--surface);
-}
-
 #regionTable .region-colour-set-input {
   width: calc(100% - 16px);
   margin: 4px 8px;
 }
 
 #regionTable .region-colour-input {
-  width: calc(100% - 16px);
+  width: 42px;
   margin: 4px 8px;
 }
 
-.region-fill-preview {
+.region-fill-picker {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1126,14 +1122,6 @@ td select:focus {
   color: var(--muted);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
-}
-
-.region-fill-swatch {
-  width: 26px;
-  height: 18px;
-  border: 1px solid #7b8b85;
-  border-radius: 3px;
-  flex: 0 0 auto;
 }
 
 .empty-table-message {
@@ -1192,7 +1180,6 @@ td select:focus {
 #mapSvg {
   display: block;
   width: 100%;
-  min-width: 1000px;
   height: auto;
   background: var(--map-background);
   box-shadow: 0 0 0 1px rgba(20, 35, 31, 0.08);
@@ -1279,6 +1266,16 @@ td select:focus {
   font-weight: 700;
 }
 
+.callout-subtitle {
+  fill: var(--muted);
+  font-style: italic;
+}
+
+.box-heading {
+  fill: var(--ink);
+  font-weight: 700;
+}
+
 .legend-note {
   fill: var(--muted);
   font-style: italic;
@@ -1294,7 +1291,7 @@ td select:focus {
   }
 
   .workspace {
-    grid-template-rows: 260px 700px;
+    grid-template-rows: minmax(700px, 1fr);
   }
 
   .region-management-controls {

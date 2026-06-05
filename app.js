@@ -6,7 +6,7 @@
     if (statusBox) statusBox.innerHTML = `<div class="status-danger">${message}</div>`;
     if (mapSvg) {
       mapSvg.setAttribute("viewBox", "0 0 900 360");
-      mapSvg.innerHTML = `<rect width="900" height="360" fill="#fff7e6"></rect><text x="450" y="180" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#8a1f11">${message}</text>`;
+      mapSvg.innerHTML = `<rect width="900" height="360" fill="#fff7e6"></rect><text x="450" y="180" text-anchor="middle" font-family="Lato" font-size="22" font-weight="700" fill="#8a1f11">${message}</text>`;
     }
     return;
   }
@@ -79,12 +79,60 @@
   const tableFields = ["name", "footnote", "type", "lon", "lat"];
 
   const layoutDefaults = {
-    widthInput: 1600,
-    heightInput: 1000,
-    labelSizeInput: 16,
+    bookSizeInput: "letter",
+    imageSizeInput: "full",
+    labelSizeInput: 18,
     markerSizeInput: 10,
     lineWidthInput: 2,
     labelCharsInput: 26
+  };
+  const activeTableStorageKey = "cartedata.activeTable";
+  const dataTableNames = ["projects", "regions", "preview"];
+
+  const imageSizePresets = {
+    letter: {
+      label: "8.5 x 11",
+      sizes: [
+        { value: "full", label: "Full", width: 612, height: 750 },
+        { value: "two-thirds", label: "2/3 page", width: 612, height: 520 },
+        { value: "half", label: "1/2 page", width: 612, height: 390 },
+        { value: "third", label: "1/3 page", width: 612, height: 260 },
+        { value: "quarter", label: "1/4 page", width: 612, height: 200 }
+      ]
+    },
+    compact: {
+      label: "6.5 x 9.75",
+      sizes: [
+        { value: "full", label: "Full", width: 468, height: 700 },
+        { value: "two-thirds", label: "2/3 page", width: 468, height: 468 },
+        { value: "half", label: "1/2 page", width: 468, height: 350 },
+        { value: "third", label: "1/3 page", width: 468, height: 235 },
+        { value: "quarter", label: "1/4 page", width: 468, height: 175 }
+      ]
+    }
+  };
+
+  const regionPresetOptions = {
+    canada: [
+      { value: "", label: "Choose preset" },
+      { value: "all", label: "All Canada" },
+      { value: "territories", label: "Territories" },
+      { value: "western", label: "Western Canada" },
+      { value: "prairies", label: "Prairies" },
+      { value: "central", label: "Central Canada" },
+      { value: "atlantic", label: "Atlantic Canada" }
+    ],
+    world: [
+      { value: "", label: "Choose continent" },
+      { value: "all", label: "All countries" },
+      { value: "africa", label: "Africa" },
+      { value: "antarctica", label: "Antarctica" },
+      { value: "asia", label: "Asia" },
+      { value: "europe", label: "Europe" },
+      { value: "north-america", label: "North America" },
+      { value: "oceania", label: "Oceania" },
+      { value: "south-america", label: "South America" }
+    ]
   };
 
   const markerShapes = [
@@ -192,12 +240,16 @@
 
   const els = {
     tableBody: document.querySelector("#projectTable tbody"),
+    projectTable: document.querySelector("#projectTable"),
     regionTableBody: document.querySelector("#regionTable tbody"),
     tablePanelTitle: document.querySelector("#tablePanelTitle"),
     projectTableTab: document.querySelector("#projectTableTab"),
     regionTableTab: document.querySelector("#regionTableTab"),
+    previewTableTab: document.querySelector("#previewTableTab"),
     projectTablePane: document.querySelector("#projectTablePane"),
     regionTablePane: document.querySelector("#regionTablePane"),
+    previewTablePane: document.querySelector("#previewTablePane"),
+    tableActions: Array.from(document.querySelectorAll(".table-actions")),
     updateRegionValuesBtn: document.querySelector("#updateRegionValuesBtn"),
     applyRegionValueColoursBtn: document.querySelector("#applyRegionValueColoursBtn"),
     resetRegionValuesBtn: document.querySelector("#resetRegionValuesBtn"),
@@ -221,9 +273,8 @@
     renderBtn: document.querySelector("#renderBtn"),
     exportSvgBtn: document.querySelector("#exportSvgBtn"),
     exportPngBtn: document.querySelector("#exportPngBtn"),
-    mapTitleInput: document.querySelector("#mapTitleInput"),
-    widthInput: document.querySelector("#widthInput"),
-    heightInput: document.querySelector("#heightInput"),
+    bookSizeInput: document.querySelector("#bookSizeInput"),
+    imageSizeInput: document.querySelector("#imageSizeInput"),
     labelSizeInput: document.querySelector("#labelSizeInput"),
     markerSizeInput: document.querySelector("#markerSizeInput"),
     lineWidthInput: document.querySelector("#lineWidthInput"),
@@ -260,6 +311,11 @@
   let regionColourOverrides = {};
   let currentMapStylePreset = "goc-green";
   let currentBoundary = "canada";
+  let renderOutputMode = "web";
+
+  function on(element, eventName, handler) {
+    if (element) element.addEventListener(eventName, handler);
+  }
 
   function getMapStylePreset(presetId = currentMapStylePreset) {
     return mapStylePresets[presetId] || mapStylePresets["goc-green"];
@@ -380,18 +436,23 @@
   function renderCategoryEditors() {
     const settings = getSettings();
     categorySettings.forEach(category => normalizeCategorySizes(category, settings));
-    els.categoryList.innerHTML = categorySettings.map(category => `
+    els.categoryList.innerHTML = categorySettings.map((category, index) => `
       <div class="category-editor${category.collapsed ? " is-collapsed" : ""}" data-category-id="${escapeHtml(category.id)}">
         <div class="category-header">
-          <button class="toggle-category-btn icon-button" type="button" data-category-id="${escapeHtml(category.id)}" aria-label="${category.collapsed ? "Expand" : "Collapse"} ${escapeHtml(category.label)}">${category.collapsed ? "▸" : "▾"}</button>
           <div class="category-title-block">
             <span class="category-swatch">${getCategorySwatchSvg(category)}</span>
-            <strong title="${escapeHtml(category.label)}">${escapeHtml(category.label)}</strong>
+            <span>
+              <strong title="${escapeHtml(category.label)}">${escapeHtml(category.label)}</strong>
+              <small>${escapeHtml(markerShapes.find(shape => shape.value === category.shape)?.label || "Marker")} · ${escapeHtml(getPresetValueForColour(category.colour) ? getRegionColourPresetLabel(0, 1).replace("Colour 1", "Preset colour") : "Custom colour")}</small>
+            </span>
           </div>
+          <button class="toggle-category-btn icon-button" type="button" data-category-id="${escapeHtml(category.id)}" aria-label="${category.collapsed ? "Expand" : "Collapse"} ${escapeHtml(category.label)}" title="${category.collapsed ? "Expand" : "Collapse"}">${category.collapsed ? "▸" : "▾"}</button>
           <div class="category-actions">
-            <button class="move-category-btn icon-button" type="button" data-category-id="${escapeHtml(category.id)}" data-direction="up" aria-label="Move ${escapeHtml(category.label)} up"${categorySettings.indexOf(category) === 0 ? " disabled" : ""}>↑</button>
-            <button class="move-category-btn icon-button" type="button" data-category-id="${escapeHtml(category.id)}" data-direction="down" aria-label="Move ${escapeHtml(category.label)} down"${categorySettings.indexOf(category) === categorySettings.length - 1 ? " disabled" : ""}>↓</button>
-            ${category.removable ? `<button class="remove-category-btn icon-button" type="button" data-category-id="${escapeHtml(category.id)}" aria-label="Remove ${escapeHtml(category.label)}">×</button>` : ""}
+            <span class="category-order-actions">
+              <button class="move-category-btn icon-button" type="button" data-category-id="${escapeHtml(category.id)}" data-direction="up" aria-label="Move ${escapeHtml(category.label)} up" title="Move up"${index === 0 ? " disabled" : ""}>↑</button>
+              <button class="move-category-btn icon-button" type="button" data-category-id="${escapeHtml(category.id)}" data-direction="down" aria-label="Move ${escapeHtml(category.label)} down" title="Move down"${index === categorySettings.length - 1 ? " disabled" : ""}>↓</button>
+            </span>
+            ${category.removable ? `<button class="remove-category-btn icon-button" type="button" data-category-id="${escapeHtml(category.id)}" aria-label="Remove ${escapeHtml(category.label)}" title="Remove">×</button>` : ""}
           </div>
         </div>
         <div class="category-body category-form">
@@ -446,7 +507,7 @@
 
   function getRenderableFootnote(value) {
     const footnote = normalizeFootnote(value);
-    return /^[A-Za-z0-9]+$/.test(footnote) ? footnote : "";
+    return /^([A-Za-z0-9]+|\*)$/.test(footnote) ? footnote : "";
   }
 
   function normalizeHeader(value) {
@@ -497,7 +558,7 @@
     nextRowId = Number.isFinite(numericRowId) ? Math.max(nextRowId, numericRowId + 1) : nextRowId + 1;
     tr.innerHTML = `
       <td><input class="name-input" type="text" value="${escapeHtml(row.name || "")}" title="${escapeHtml(row.name || "")}" aria-label="Project name"></td>
-      <td><input class="footnote-input" type="text" value="${escapeHtml(row.footnote || "")}" aria-label="Footnote marker" maxlength="2" pattern="[A-Za-z0-9]*"></td>
+      <td><input class="footnote-input" type="text" value="${escapeHtml(row.footnote || "")}" aria-label="Footnote marker" maxlength="2" pattern="[A-Za-z0-9]*|[*]"></td>
       <td>
         <select class="type-input" title="${escapeHtml(getCategoryLabel(row.type))}" aria-label="Project type">
           ${getTypeOptions(row.type)}
@@ -559,16 +620,77 @@
     })).filter(row => row.name.length > 0 || row.lon !== "" || row.lat !== "");
   }
 
-  function getSettings() {
+  function getBookSizePreset(value = els.bookSizeInput.value) {
+    return imageSizePresets[value] ? imageSizePresets[value] : imageSizePresets[layoutDefaults.bookSizeInput];
+  }
+
+  function getImageSizePreset(bookSizeValue = els.bookSizeInput.value, imageSizeValue = els.imageSizeInput.value) {
+    const book = getBookSizePreset(bookSizeValue);
+    return book.sizes.find(size => size.value === imageSizeValue) || book.sizes[0];
+  }
+
+  function findImageSizePresetByDimensions(width, height) {
+    const parsedWidth = Number(width);
+    const parsedHeight = Number(height);
+    if (!parsedWidth || !parsedHeight) return null;
+
+    for (const [bookValue, book] of Object.entries(imageSizePresets)) {
+      const size = book.sizes.find(option => option.width === parsedWidth && option.height === parsedHeight);
+      if (size) return { bookValue, sizeValue: size.value };
+    }
+
+    return null;
+  }
+
+  function renderImageSizeOptions() {
+    const currentValue = els.imageSizeInput.value;
+    const book = getBookSizePreset();
+    els.imageSizeInput.innerHTML = book.sizes.map(size => (
+      `<option value="${escapeHtml(size.value)}">${escapeHtml(size.label)} (${size.width} x ${size.height})</option>`
+    )).join("");
+    els.imageSizeInput.value = book.sizes.some(size => size.value === currentValue) ? currentValue : layoutDefaults.imageSizeInput;
+  }
+
+  function applyImageSizePreset(bookValue, imageSizeValue) {
+    els.bookSizeInput.value = imageSizePresets[bookValue] ? bookValue : layoutDefaults.bookSizeInput;
+    renderImageSizeOptions();
+    const book = getBookSizePreset();
+    els.imageSizeInput.value = book.sizes.some(size => size.value === imageSizeValue) ? imageSizeValue : layoutDefaults.imageSizeInput;
+  }
+
+  function normalizeLabelSizePt(value) {
+    const parsed = Number(value);
+    const fallback = layoutDefaults.labelSizeInput;
+    const labelSize = Number.isFinite(parsed) ? parsed : fallback;
+    return Math.max(12, Math.min(30, labelSize));
+  }
+
+  function getWebLabelSize(printPt) {
+    // CSS standard: 1pt = 72/96px on a 96dpi screen.
+    // The SVG is also CSS-scaled up (width:100%, min-width:1000px) from the
+    // 612-unit viewBox, so using the raw pt value makes labels appear too large.
+    // normalizeLabelSizePt already clamps printPt to [12, 30].
+    return Math.round(printPt * (72 / 96));
+  }
+
+  function getSettings(options = {}) {
+    const imageSize = getImageSizePreset();
+    const outputMode = options.outputMode || renderOutputMode;
+    const labelSizePt = normalizeLabelSizePt(els.labelSizeInput.value);
     return {
-      width: Number(els.widthInput.value) || 1600,
-      height: Number(els.heightInput.value) || 1000,
-      title: els.mapTitleInput.value.trim(),
-      labelSize: Number(els.labelSizeInput.value) || 16,
+      outputMode,
+      bookSize: imageSizePresets[els.bookSizeInput.value] ? els.bookSizeInput.value : layoutDefaults.bookSizeInput,
+      imageSize: imageSize.value,
+      width: imageSize.width,
+      height: imageSize.height,
+      title: "",
+      labelSizePt,
+      labelSize: labelSizePt,
+      labelSizeRender: outputMode === "print" ? labelSizePt : getWebLabelSize(labelSizePt),
       markerSize: Number(els.markerSizeInput.value) || 10,
       lineWidth: Number(els.lineWidthInput.value) || 2,
       labelMaxChars: Number(els.labelCharsInput.value) || 26,
-      fontFamily: els.fontFamilyInput.value || "Lato, Arial, Helvetica, sans-serif",
+      fontFamily: "Lato",
       showLegend: els.showLegendInput.checked,
       showCallouts: els.showCalloutsInput.checked,
       showLineCasing: els.showLineCasingInput.checked,
@@ -577,14 +699,18 @@
   }
 
   function applySettings(settings = {}) {
-    if (settings.title !== undefined) els.mapTitleInput.value = settings.title;
-    if (settings.width !== undefined) els.widthInput.value = settings.width;
-    if (settings.height !== undefined) els.heightInput.value = settings.height;
-    if (settings.labelSize !== undefined) els.labelSizeInput.value = settings.labelSize;
+    const matchedPreset = findImageSizePresetByDimensions(settings.width, settings.height);
+    applyImageSizePreset(
+      settings.bookSize || (matchedPreset && matchedPreset.bookValue) || layoutDefaults.bookSizeInput,
+      settings.imageSize || (matchedPreset && matchedPreset.sizeValue) || layoutDefaults.imageSizeInput
+    );
+    if (settings.labelSizePt !== undefined || settings.labelSize !== undefined) {
+      els.labelSizeInput.value = normalizeLabelSizePt(settings.labelSizePt !== undefined ? settings.labelSizePt : settings.labelSize);
+    }
     if (settings.markerSize !== undefined) els.markerSizeInput.value = settings.markerSize;
     if (settings.lineWidth !== undefined) els.lineWidthInput.value = settings.lineWidth;
     if (settings.labelMaxChars !== undefined) els.labelCharsInput.value = settings.labelMaxChars;
-    if (settings.fontFamily !== undefined) els.fontFamilyInput.value = settings.fontFamily;
+    els.fontFamilyInput.value = "Lato";
     if (settings.showLegend !== undefined) els.showLegendInput.checked = Boolean(settings.showLegend);
     if (settings.showCallouts !== undefined) els.showCalloutsInput.checked = Boolean(settings.showCallouts);
     if (settings.showLineCasing !== undefined) els.showLineCasingInput.checked = Boolean(settings.showLineCasing);
@@ -763,7 +889,7 @@
   function renderRegionValueTable() {
     if (!els.regionTableBody) return;
     if (!canadaGeo || !Array.isArray(canadaGeo.features)) {
-      els.regionTableBody.innerHTML = `<tr><td colspan="8" class="empty-table-message">Map boundary must load before region values can be edited.</td></tr>`;
+      els.regionTableBody.innerHTML = `<tr><td colspan="6" class="empty-table-message">Map boundary must load before region values can be edited.</td></tr>`;
       return;
     }
 
@@ -777,9 +903,8 @@
         </td>
         <td class="region-count-cell">${region.count}</td>
         <td>
-          <input class="region-value-input" type="number" step="any" value="${region.value === "" ? "" : region.value}" data-region-id="${escapeHtml(region.id)}" aria-label="${escapeHtml(region.name)} region colour value">
+          <input class="region-value-input" type="number" step="any" value="${region.value === "" ? "" : region.value}" data-region-id="${escapeHtml(region.id)}" aria-label="${escapeHtml(region.name)} colour order">
         </td>
-        <td class="region-source-cell">${escapeHtml(region.valueSource)}</td>
         <td>
           <select class="region-colour-set-input" data-region-id="${escapeHtml(region.id)}" aria-label="${escapeHtml(region.name)} approved fill colour">
             <option value=""${region.colourSource === "Auto by value" ? " selected" : ""}>Auto by value</option>
@@ -787,11 +912,8 @@
           </select>
         </td>
         <td>
-          <input class="region-colour-input" type="color" value="${escapeHtml(region.colour)}" aria-label="${escapeHtml(region.name)} fill colour" data-region-id="${escapeHtml(region.id)}">
-        </td>
-        <td>
-          <span class="region-fill-preview">
-            <span class="region-fill-swatch" style="background:${escapeHtml(region.colour)}"></span>
+          <span class="region-fill-picker">
+            <input class="region-colour-input" type="color" value="${escapeHtml(region.colour)}" aria-label="${escapeHtml(region.name)} preview fill colour" data-region-id="${escapeHtml(region.id)}">
             <span>${escapeHtml(region.colour)}</span>
           </span>
         </td>
@@ -806,13 +928,21 @@
       return;
     }
 
-    els.regionPresetInput.disabled = currentBoundary !== "canada";
-    els.regionPresetInput.title = currentBoundary === "canada" ? "" : "Region presets are currently Canada-specific.";
+    renderRegionPresetOptions();
     initializeRegionVisibility();
     const regions = getRegionRows();
     const selectedCount = regions.filter(region => regionVisibility[region.id] !== false).length;
     els.regionSummary.textContent = `${selectedCount} of ${regions.length} regions selected.`;
     renderRegionValueTable();
+  }
+
+  function renderRegionPresetOptions() {
+    const options = regionPresetOptions[currentBoundary] || regionPresetOptions.canada;
+    const currentValue = els.regionPresetInput.value;
+    els.regionPresetInput.innerHTML = options.map(option => `<option value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</option>`).join("");
+    els.regionPresetInput.value = options.some(option => option.value === currentValue) ? currentValue : "";
+    els.regionPresetInput.disabled = false;
+    els.regionPresetInput.title = currentBoundary === "world" ? "Select countries by continent." : "";
   }
 
   function setAllRegions(visible) {
@@ -836,9 +966,27 @@
     return groups[preset] || [];
   }
 
+  function getWorldPresetContinents(preset) {
+    const groups = {
+      africa: ["africa"],
+      antarctica: ["antarctica"],
+      asia: ["asia"],
+      europe: ["europe"],
+      "north-america": ["north america"],
+      oceania: ["oceania"],
+      "south-america": ["south america"]
+    };
+    return groups[preset] || [];
+  }
+
   function regionMatchesPreset(name, presetNames) {
     const normalizedName = String(name || "").toLowerCase();
     return presetNames.some(presetName => normalizedName.includes(presetName));
+  }
+
+  function getFeatureContinent(feature) {
+    const props = feature && feature.properties ? feature.properties : {};
+    return String(props.continent || "").trim().toLowerCase();
   }
 
   function applyRegionPreset(preset) {
@@ -848,11 +996,11 @@
       return;
     }
 
-    const presetNames = getRegionPresetNames(preset);
+    const presetNames = currentBoundary === "world" ? getWorldPresetContinents(preset) : getRegionPresetNames(preset);
     canadaGeo.features.forEach((feature, index) => {
       const id = getRegionId(feature, index);
-      const name = getRegionName(feature, index);
-      regionVisibility[id] = regionMatchesPreset(name, presetNames);
+      const matchValue = currentBoundary === "world" ? getFeatureContinent(feature) : getRegionName(feature, index);
+      regionVisibility[id] = regionMatchesPreset(matchValue, presetNames);
     });
     renderRegionControls();
     render();
@@ -886,13 +1034,14 @@
     els.themeStylesheet.setAttribute("href", preset.stylesheet);
 
     if (shouldApplyMapColours) {
+      const settings = getSettings();
       preset.categoryStyles.forEach((style, index) => {
         const category = categorySettings[index];
         if (!category) return;
         category.colour = style.colour;
         category.stroke = style.stroke;
-        category.markerSize = optionalNumber(style.markerSize) || category.markerSize || getSettings().markerSize;
-        category.lineWidth = optionalNumber(style.lineWidth) || category.lineWidth || getSettings().lineWidth;
+        category.markerSize = optionalNumber(style.markerSize) || category.markerSize || settings.markerSize;
+        category.lineWidth = optionalNumber(style.lineWidth) || category.lineWidth || settings.lineWidth;
         category.markerSizeCustom = false;
         category.lineWidthCustom = false;
       });
@@ -1371,7 +1520,7 @@
     const pngWidth = settings.width * 2;
     const pngHeight = settings.height * 2;
     const megapixels = (pngWidth * pngHeight / 1000000).toFixed(1);
-    return `SVG: ${settings.width} x ${settings.height}. PNG: ${pngWidth} x ${pngHeight}, about ${megapixels} megapixels.`;
+    return `Print SVG: ${settings.width} x ${settings.height} pt. Web PNG: ${pngWidth} x ${pngHeight} px, about ${megapixels} megapixels.`;
   }
 
   function updateStatus(rows, mappedRows, calloutRows, report, geoLoaded) {
@@ -1503,19 +1652,46 @@
     render();
   }
 
+  function getSavedDataTable() {
+    try {
+      const savedTable = window.localStorage.getItem(activeTableStorageKey);
+      return dataTableNames.includes(savedTable) ? savedTable : "projects";
+    } catch (error) {
+      return "projects";
+    }
+  }
+
+  function saveActiveDataTable(tableName) {
+    if (!dataTableNames.includes(tableName)) return;
+    try {
+      window.localStorage.setItem(activeTableStorageKey, tableName);
+    } catch (error) {
+      // Storage can be unavailable in some locked-down browser contexts.
+    }
+  }
+
   function switchDataTable(tableName) {
-    const showRegions = tableName === "regions";
-    els.projectTableTab.classList.toggle("is-active", !showRegions);
-    els.regionTableTab.classList.toggle("is-active", showRegions);
-    els.projectTableTab.setAttribute("aria-selected", String(!showRegions));
-    els.regionTableTab.setAttribute("aria-selected", String(showRegions));
-    els.projectTablePane.classList.toggle("is-active", !showRegions);
-    els.regionTablePane.classList.toggle("is-active", showRegions);
-    document.querySelectorAll(".table-actions").forEach(actions => {
-      actions.classList.toggle("is-active", actions.dataset.tableActions === (showRegions ? "regions" : "projects"));
+    const tabs = [
+      { name: "projects", title: "Project table", tab: els.projectTableTab, pane: els.projectTablePane, actions: "projects" },
+      { name: "regions", title: "Map regions", tab: els.regionTableTab, pane: els.regionTablePane, actions: "regions" },
+      { name: "preview", title: "Preview", tab: els.previewTableTab, pane: els.previewTablePane, actions: "" }
+    ];
+    const activeName = tabs.some(tab => tab.name === tableName) ? tableName : "projects";
+    const activeTab = tabs.find(tab => tab.name === activeName);
+
+    tabs.forEach(tab => {
+      const isActive = tab.name === activeName;
+      tab.tab.classList.toggle("is-active", isActive);
+      tab.tab.setAttribute("aria-selected", String(isActive));
+      tab.pane.classList.toggle("is-active", isActive);
     });
-    els.tablePanelTitle.textContent = showRegions ? "Map regions" : "Project table";
-    if (showRegions) renderRegionValueTable();
+
+    els.tableActions.forEach(actions => {
+      actions.classList.toggle("is-active", actions.dataset.tableActions === activeTab.actions);
+    });
+    els.tablePanelTitle.textContent = activeTab.title;
+    if (activeName === "regions") renderRegionValueTable();
+    saveActiveDataTable(activeName);
   }
 
   function render() {
@@ -1654,7 +1830,7 @@
       .data(placed)
       .join("text")
       .attr("class", "map-label")
-      .attr("font-size", settings.labelSize)
+      .attr("font-size", settings.labelSizeRender)
       .attr("font-family", settings.fontFamily)
       .attr("data-layout-id", d => d.layoutId)
       .attr("x", d => d.labelX)
@@ -1669,7 +1845,7 @@
           .attr("x", d.labelX)
           .attr("dy", i === 0 ? 0 : d.lineHeight)
           .text(line);
-        if (i === d.lines.length - 1 && d.footnote) appendSuperscript(text, d.footnote, settings.labelSize);
+        if (i === d.lines.length - 1 && d.footnote) appendSuperscript(text, d.footnote, settings.labelSizeRender);
       });
     });
     attachLabelDragging(labels);
@@ -1938,14 +2114,15 @@
   }
 
   function syncCategorySettingsFromControls() {
+    const settings = getSettings();
     Array.from(els.categoryList.querySelectorAll(".category-editor")).forEach(editor => {
       const category = categorySettings.find(item => item.id === editor.dataset.categoryId);
       if (!category) return;
       category.label = editor.querySelector(".category-label-input").value.trim() || category.defaultLabel;
       category.shape = normalizeMarkerShape(editor.querySelector(".category-shape-input").value);
       category.colour = editor.querySelector(".category-colour-input").value;
-      category.markerSize = optionalNumber(editor.querySelector(".category-marker-size-input").value) || getSettings().markerSize;
-      category.lineWidth = optionalNumber(editor.querySelector(".category-line-width-input").value) || getSettings().lineWidth;
+      category.markerSize = optionalNumber(editor.querySelector(".category-marker-size-input").value) || settings.markerSize;
+      category.lineWidth = optionalNumber(editor.querySelector(".category-line-width-input").value) || settings.lineWidth;
       editor.querySelector(".category-header strong").textContent = category.label;
       editor.querySelector(".category-swatch").innerHTML = getCategorySwatchSvg(category);
     });
@@ -1960,20 +2137,21 @@
 
     const existingCategories = categorySettings.slice();
     const nextCategories = [];
+    const settings = getSettings();
 
     categories.forEach(savedCategory => {
       const category = existingCategories.find(item => item.id === savedCategory.id);
       const label = String(savedCategory.label || savedCategory.defaultLabel || "Category").trim() || "Category";
       const shape = normalizeMarkerShape(savedCategory.shape);
       const colour = savedCategory.colour || "#217346";
-      const markerSize = optionalNumber(savedCategory.markerSize) || getSettings().markerSize;
-      const lineWidth = optionalNumber(savedCategory.lineWidth) || getSettings().lineWidth;
+      const markerSize = optionalNumber(savedCategory.markerSize) || settings.markerSize;
+      const lineWidth = optionalNumber(savedCategory.lineWidth) || settings.lineWidth;
       const markerSizeCustom = savedCategory.markerSizeCustom !== undefined
         ? Boolean(savedCategory.markerSizeCustom)
-        : markerSize !== getSettings().markerSize;
+        : markerSize !== settings.markerSize;
       const lineWidthCustom = savedCategory.lineWidthCustom !== undefined
         ? Boolean(savedCategory.lineWidthCustom)
-        : lineWidth !== getSettings().lineWidth;
+        : lineWidth !== settings.lineWidth;
 
       if (category) {
         category.label = label;
@@ -2031,6 +2209,10 @@
   }
 
   function handleLayoutSettingsChange(event) {
+    if (event && event.target === els.bookSizeInput) {
+      renderImageSizeOptions();
+    }
+
     if (event && (event.target === els.markerSizeInput || event.target === els.lineWidthInput)) {
       syncDefaultCategorySizes();
     }
@@ -2051,6 +2233,7 @@
   function addCategory() {
     const count = categorySettings.length + 1;
     const label = `Category ${count}`;
+    const settings = getSettings();
     categorySettings.push({
       id: makeCategoryId(label),
       label,
@@ -2058,8 +2241,8 @@
       shape: "circle",
       colour: "#217346",
       stroke: "#ffffff",
-      markerSize: getSettings().markerSize,
-      lineWidth: getSettings().lineWidth,
+      markerSize: settings.markerSize,
+      lineWidth: settings.lineWidth,
       markerSizeCustom: false,
       lineWidthCustom: false,
       collapsed: false,
@@ -2151,9 +2334,16 @@
   }
 
   function drawLegend(svg, settings) {
-    const rowHeight = 40;
-    const verticalPadding = 18;
-    const dimensions = { width: 430, height: verticalPadding * 2 + categorySettings.length * rowHeight };
+    const headingSize = Math.max(settings.labelSize, Math.round(settings.labelSize * 1.08));
+    const headingSizeRender = Math.max(settings.labelSizeRender, Math.round(settings.labelSizeRender * 1.08));
+    const rowHeight = Math.max(28, Math.round(settings.labelSize * 2.1));
+    const headingHeight = Math.max(30, Math.round(headingSize * 1.8));
+    const verticalPadding = Math.max(14, Math.round(settings.labelSize * 1.1));
+    const longestLabelLength = Math.max(6, ...categorySettings.map(category => category.label.length));
+    const dimensions = {
+      width: Math.max(280, Math.min(430, Math.round(longestLabelLength * settings.labelSize * 0.62 + 120))),
+      height: verticalPadding * 2 + headingHeight + categorySettings.length * rowHeight
+    };
     const position = getBoxPosition("legend", { x: 40, y: settings.height - 150 }, dimensions, settings);
     const group = svg.append("g")
       .attr("class", "legend-layer movable-map-box")
@@ -2165,17 +2355,26 @@
       .attr("y", 0)
       .attr("width", dimensions.width)
       .attr("height", dimensions.height)
-      .attr("rx", 18);
+      .attr("rx", 8);
+
+    group.append("text")
+      .attr("class", "box-heading legend-heading")
+      .attr("x", 30)
+      .attr("y", verticalPadding + 4)
+      .attr("font-size", headingSizeRender)
+      .attr("font-family", settings.fontFamily)
+      .attr("dominant-baseline", "hanging")
+      .text("Legend");
 
     categorySettings.forEach((category, index) => {
-      const itemY = verticalPadding + index * rowHeight + rowHeight / 2;
+      const itemY = verticalPadding + headingHeight + index * rowHeight + rowHeight / 2;
       const legendMarkerSize = Math.max(8, Math.min(18, getCategoryMarkerSize(category, settings)));
       drawMarkerSymbol(group, category, 54, itemY, legendMarkerSize);
       group.append("text")
         .attr("class", "legend-text")
         .attr("x", 86)
         .attr("y", itemY)
-        .attr("font-size", 22)
+        .attr("font-size", settings.labelSizeRender)
         .attr("font-family", settings.fontFamily)
         .attr("text-anchor", "start")
         .attr("dominant-baseline", "middle")
@@ -2186,11 +2385,24 @@
   }
 
   function drawCallouts(svg, calloutRows, settings, mapBounds) {
-    const rowHeight = 38;
-    const dimensions = { width: 420, height: 28 + calloutRows.length * rowHeight };
+    const subtitleText = "Canada-wide, not shown on map";
+    const nameSize = settings.labelSizeRender;
+    const subtitleSizePt = Math.max(10, Math.round(settings.labelSize * 0.85));
+    const subtitleSize = Math.max(9, Math.round(nameSize * 0.85));
+    const lineH = Math.max(20, Math.round(settings.labelSize * 1.35));
+    const subLineH = Math.max(15, Math.round(subtitleSizePt * 1.3));
+    const rowHeight = lineH + subLineH + Math.max(6, Math.round(settings.labelSize * 0.3));
+    const padV = Math.max(12, Math.round(settings.labelSize * 0.75));
+    const longestNameLen = Math.max(0, ...calloutRows.map(row => String(row.name || "").length));
+    const nameWidth = longestNameLen * settings.labelSize * 0.58 + 80;
+    const subWidth = subtitleText.length * subtitleSizePt * 0.56 + 80;
+    const dimensions = {
+      width: Math.max(200, Math.min(settings.width - 40, Math.round(Math.max(nameWidth, subWidth)))),
+      height: padV * 2 + calloutRows.length * rowHeight
+    };
     const fallback = {
-      x: Math.min(settings.width - dimensions.width - 120, mapBounds.x1 + 30),
-      y: Math.max(80, mapBounds.y0 + 150)
+      x: Math.max(30, settings.width - dimensions.width - 30),
+      y: 30
     };
     const position = getBoxPosition("callouts", fallback, dimensions, settings);
     const group = svg.append("g")
@@ -2202,29 +2414,34 @@
       .attr("x", 0)
       .attr("y", 0)
       .attr("width", dimensions.width)
-      .attr("height", dimensions.height);
+      .attr("height", dimensions.height)
+      .attr("rx", 8);
 
     calloutRows.forEach((row, i) => {
-      const itemY = 28 + i * rowHeight;
+      const rowY = padV + i * rowHeight;
       const category = getCategory(row.type);
-      const calloutMarkerSize = Math.max(7, Math.min(14, getCategoryMarkerSize(category, settings)));
-      drawMarkerSymbol(group, category, 34, itemY - 6, calloutMarkerSize);
-      const calloutText = group.append("text")
+      const markerSize = Math.max(7, Math.min(14, getCategoryMarkerSize(category, settings)));
+      drawMarkerSymbol(group, category, 26, rowY + (lineH + subLineH) / 2, markerSize);
+
+      const nameEl = group.append("text")
         .attr("class", "callout-text")
-        .attr("x", 62)
-        .attr("y", itemY)
-        .attr("font-size", settings.labelSize)
+        .attr("x", 52)
+        .attr("y", rowY)
+        .attr("font-size", nameSize)
         .attr("font-family", settings.fontFamily)
+        .attr("dominant-baseline", "hanging")
         .text(row.name);
       const footnote = getRenderableFootnote(row.footnote);
-      if (footnote) appendSuperscript(calloutText, footnote, settings.labelSize);
+      if (footnote) appendSuperscript(nameEl, footnote, nameSize);
+
       group.append("text")
-        .attr("class", "legend-note")
-        .attr("x", 62)
-        .attr("y", itemY + 18)
-        .attr("font-size", settings.labelSize - 2)
+        .attr("class", "callout-subtitle")
+        .attr("x", 52)
+        .attr("y", rowY + lineH)
+        .attr("font-size", subtitleSize)
         .attr("font-family", settings.fontFamily)
-        .text("Canada-wide, not shown on map");
+        .attr("dominant-baseline", "hanging")
+        .text(subtitleText);
     });
 
     attachBoxDragging(group, "callouts", position, dimensions, settings, "Callouts");
@@ -2347,7 +2564,7 @@
   }
 
   function quoteFontFamily(fontFamily) {
-    return String(fontFamily || "Lato, Arial, Helvetica, sans-serif")
+    return String(fontFamily || "Lato")
       .split(",")
       .map(font => {
         const trimmed = font.trim();
@@ -2377,11 +2594,12 @@
       .label-footnote { font-weight: 700; }
       .callout-box, .legend-box { fill: ${mapBackground}; stroke: ${mapBoxBorder}; stroke-width: 1.5; }
       .callout-text, .legend-text { font-family: ${fontFamily}; fill: ${ink}; font-weight: 700; }
+      .box-heading { font-family: ${fontFamily}; fill: ${ink}; font-weight: 700; }
       .legend-note { font-family: ${fontFamily}; fill: ${muted}; font-style: italic; }
     `;
   }
 
-  function cloneSvgForExport() {
+  function cloneCurrentSvgForExport(outputMode = "web") {
     const svgNode = document.querySelector("#mapSvg");
     if (!svgNode || !svgNode.children.length) throw new Error("There is no map preview to export.");
 
@@ -2389,6 +2607,14 @@
     clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
     clone.setAttribute("version", "1.1");
     clone.setAttribute("style", `background:${getCssVar("--map-background", "#ffffff")}`);
+    if (outputMode === "print") {
+      const settings = getSettings({ outputMode: "print" });
+      clone.setAttribute("width", `${settings.width}pt`);
+      clone.setAttribute("height", `${settings.height}pt`);
+      clone.setAttribute("data-output", "print");
+    } else {
+      clone.setAttribute("data-output", "web");
+    }
 
     const style = document.createElementNS("http://www.w3.org/2000/svg", "style");
     style.textContent = getExportCss();
@@ -2396,12 +2622,26 @@
     return clone;
   }
 
+  function cloneSvgForExport(outputMode = "web") {
+    if (outputMode === renderOutputMode) return cloneCurrentSvgForExport(outputMode);
+
+    const previousOutputMode = renderOutputMode;
+    try {
+      renderOutputMode = outputMode;
+      render();
+      return cloneCurrentSvgForExport(outputMode);
+    } finally {
+      renderOutputMode = previousOutputMode;
+      render();
+    }
+  }
+
   function exportSvg() {
     try {
-      const clone = cloneSvgForExport();
+      const clone = cloneSvgForExport("print");
       const source = `<?xml version="1.0" encoding="UTF-8"?>\n${new XMLSerializer().serializeToString(clone)}`;
       download("custom-map.svg", source, "image/svg+xml;charset=utf-8");
-      setStatusMessage("SVG export started. Check your Downloads folder for custom-map.svg.", "ok");
+      setStatusMessage("Print SVG export started. Check your Downloads folder for custom-map.svg.", "ok");
     } catch (error) {
       setStatusMessage(`SVG export failed: ${error.message || String(error)}`, "danger");
     }
@@ -2411,7 +2651,7 @@
     let url = "";
     try {
       const settings = getSettings();
-      const clone = cloneSvgForExport();
+      const clone = cloneSvgForExport("web");
       const svgText = new XMLSerializer().serializeToString(clone);
       const svgBlob = new Blob([svgText], { type: "image/svg+xml;charset=utf-8" });
       url = URL.createObjectURL(svgBlob);
@@ -2614,7 +2854,7 @@
       const hasLat = row.lat !== "";
       if (!row.name && !hasLon && !hasLat) return;
       if (row.footnote && !getRenderableFootnote(row.footnote)) {
-        messages.push(`CSV row ${index + 2}: footnote must contain only letters and numbers to appear as superscript.`);
+        messages.push(`CSV row ${index + 2}: footnote must contain only letters, numbers, or a single asterisk to appear as superscript.`);
       }
       if (!row.name && hasLon && hasLat) messages.push(`CSV row ${index + 2}: name is blank, so only the marker dot will be shown.`);
       if (hasLon !== hasLat) {
@@ -2641,24 +2881,24 @@
   }
 
   function initEvents() {
-    if (els.loadSampleBtn) els.loadSampleBtn.addEventListener("click", () => setRows(sampleRows));
-    els.ribbonLoadSampleBtn.addEventListener("click", () => setRows(sampleRows));
-    els.ribbonOpenProjectBtn.addEventListener("click", () => els.projectInput.click());
-    els.ribbonSaveProjectBtn.addEventListener("click", saveProject);
-    els.ribbonImportCsvBtn.addEventListener("click", () => els.csvInput.click());
-    els.ribbonExportCsvBtn.addEventListener("click", exportCsv);
-    els.ribbonAutoPlaceBtn.addEventListener("click", autoPlaceLabels);
-    els.ribbonExportSvgBtn.addEventListener("click", exportSvg);
-    els.ribbonExportPngBtn.addEventListener("click", exportPng);
-    els.addRowBtn.addEventListener("click", () => {
+    on(els.loadSampleBtn, "click", () => setRows(sampleRows));
+    on(els.ribbonLoadSampleBtn, "click", () => setRows(sampleRows));
+    on(els.ribbonOpenProjectBtn, "click", () => els.projectInput.click());
+    on(els.ribbonSaveProjectBtn, "click", saveProject);
+    on(els.ribbonImportCsvBtn, "click", () => els.csvInput.click());
+    on(els.ribbonExportCsvBtn, "click", exportCsv);
+    on(els.ribbonAutoPlaceBtn, "click", autoPlaceLabels);
+    on(els.ribbonExportSvgBtn, "click", exportSvg);
+    on(els.ribbonExportPngBtn, "click", exportPng);
+    on(els.addRowBtn, "click", () => {
       const tr = addRow();
       tr.classList.add("is-new");
       tr.scrollIntoView({ block: "nearest", behavior: "smooth" });
       tr.querySelector(".name-input").focus();
       window.setTimeout(() => tr.classList.remove("is-new"), 120);
     });
-    els.clearRowsBtn.addEventListener("click", () => setRows([]));
-    els.deleteSelectedBtn.addEventListener("click", () => {
+    on(els.clearRowsBtn, "click", () => setRows([]));
+    on(els.deleteSelectedBtn, "click", () => {
       const selectedRows = Array.from(els.tableBody.querySelectorAll("tr"))
         .filter(tr => tr.querySelector(".row-select").checked);
       if (!selectedRows.length) {
@@ -2675,39 +2915,39 @@
         render();
       }, 260);
     });
-    els.renderBtn.addEventListener("click", autoPlaceLabels);
-    if (els.downloadCsvBtn) els.downloadCsvBtn.addEventListener("click", exportCsv);
-    if (els.saveProjectBtn) els.saveProjectBtn.addEventListener("click", saveProject);
-    if (els.exportSvgBtn) els.exportSvgBtn.addEventListener("click", exportSvg);
-    if (els.exportPngBtn) els.exportPngBtn.addEventListener("click", exportPng);
-    els.projectTableTab.addEventListener("click", () => switchDataTable("projects"));
-    els.regionTableTab.addEventListener("click", () => switchDataTable("regions"));
-    if (els.updateRegionValuesBtn) els.updateRegionValuesBtn.addEventListener("click", () => updateRegionValuesFromProjectPoints({ selectRegions: true }));
-    els.applyRegionValueColoursBtn.addEventListener("click", () => {
+    on(els.renderBtn, "click", autoPlaceLabels);
+    on(els.downloadCsvBtn, "click", exportCsv);
+    on(els.saveProjectBtn, "click", saveProject);
+    on(els.exportSvgBtn, "click", exportSvg);
+    on(els.exportPngBtn, "click", exportPng);
+    on(els.projectTableTab, "click", () => switchDataTable("projects"));
+    on(els.regionTableTab, "click", () => switchDataTable("regions"));
+    on(els.previewTableTab, "click", () => switchDataTable("preview"));
+    on(els.updateRegionValuesBtn, "click", () => updateRegionValuesFromProjectPoints({ selectRegions: true }));
+    on(els.applyRegionValueColoursBtn, "click", () => {
       applyRegionColoursByValue();
       setStatusMessage("Applied region colours from the Map regions table.", "ok");
     });
-    els.resetRegionValuesBtn.addEventListener("click", resetRegionValues);
-    els.csvInput.addEventListener("change", e => {
+    on(els.resetRegionValuesBtn, "click", resetRegionValues);
+    on(els.csvInput, "change", e => {
       const file = e.target.files && e.target.files[0];
       if (file) importCsv(file);
       e.target.value = "";
     });
-    els.projectInput.addEventListener("change", e => {
+    on(els.projectInput, "change", e => {
       const file = e.target.files && e.target.files[0];
       if (file) loadProject(file);
       e.target.value = "";
     });
-    els.statusBox.addEventListener("click", handleStatusAction);
-    document.querySelector("#projectTable").addEventListener("paste", pasteIntoTable);
+    on(els.statusBox, "click", handleStatusAction);
+    on(els.projectTable, "paste", pasteIntoTable);
     document.addEventListener("click", event => {
       const resetButton = event.target.closest(".reset-default-btn");
       if (resetButton) resetLayoutInputToDefault(resetButton);
     });
     [
-      els.mapTitleInput,
-      els.widthInput,
-      els.heightInput,
+      els.bookSizeInput,
+      els.imageSizeInput,
       els.labelSizeInput,
       els.markerSizeInput,
       els.lineWidthInput,
@@ -2717,11 +2957,11 @@
       els.showCalloutsInput,
       els.showLineCasingInput,
       els.lockMarkerCoordinatesInput
-    ].filter(Boolean).forEach(el => el.addEventListener("change", handleLayoutSettingsChange));
-    els.addCategoryBtn.addEventListener("click", addCategory);
-    els.categoryList.addEventListener("change", handleCategorySettingsChange);
-    els.categoryList.addEventListener("input", debounce(handleCategorySettingsChange, 250));
-    els.categoryList.addEventListener("click", event => {
+    ].forEach(el => on(el, "change", handleLayoutSettingsChange));
+    on(els.addCategoryBtn, "click", addCategory);
+    on(els.categoryList, "change", handleCategorySettingsChange);
+    on(els.categoryList, "input", debounce(handleCategorySettingsChange, 250));
+    on(els.categoryList, "click", event => {
       const removeButton = event.target.closest(".remove-category-btn");
       if (removeButton) removeCategory(removeButton.dataset.categoryId);
 
@@ -2731,7 +2971,7 @@
       const toggleButton = event.target.closest(".toggle-category-btn");
       if (toggleButton) toggleCategory(toggleButton.dataset.categoryId);
     });
-    els.regionTableBody.addEventListener("change", event => {
+    on(els.regionTableBody, "change", event => {
       if (event.target.classList.contains("region-table-included-input")) {
         regionVisibility[event.target.dataset.regionId] = event.target.checked;
         renderRegionControls();
@@ -2771,11 +3011,12 @@
         return;
       }
     });
-    els.mapStylePresetInput.addEventListener("change", () => {
+    on(els.mapStylePresetInput, "change", () => {
       applyMapStylePreset(els.mapStylePresetInput.value);
     });
-    els.boundaryInput.addEventListener("change", async () => {
+    on(els.boundaryInput, "change", async () => {
       currentBoundary = Object.prototype.hasOwnProperty.call(boundarySources, els.boundaryInput.value) ? els.boundaryInput.value : "canada";
+      renderRegionPresetOptions();
       regionVisibility = {};
       regionFills = {};
       regionValues = {};
@@ -2783,14 +3024,14 @@
       await loadGeo();
       render();
     });
-    els.regionPresetInput.addEventListener("change", () => {
+    on(els.regionPresetInput, "change", () => {
       applyRegionPreset(els.regionPresetInput.value);
       els.regionPresetInput.value = "";
     });
-    els.selectAllRegionsBtn.addEventListener("click", () => setAllRegions(true));
-    els.clearRegionsBtn.addEventListener("click", () => setAllRegions(false));
-    els.selectProjectRegionsBtn.addEventListener("click", selectRegionsWithProjectPoints);
-    els.resetRegionColoursBtn.addEventListener("click", resetRegionColours);
+    on(els.selectAllRegionsBtn, "click", () => setAllRegions(true));
+    on(els.clearRegionsBtn, "click", () => setAllRegions(false));
+    on(els.selectProjectRegionsBtn, "click", selectRegionsWithProjectPoints);
+    on(els.resetRegionColoursBtn, "click", resetRegionColours);
   }
 
   async function loadGeo() {
@@ -2799,6 +3040,7 @@
       canadaGeo = normalizeBoundaryGeoJson(await fetchGeoJsonWithFallback(source), source);
       initializeRegionVisibility();
       applyRegionColoursByValue(false);
+      renderRegionControls();
     } catch (error) {
       canadaGeo = null;
       renderRegionControls();
@@ -2888,11 +3130,14 @@
     renderRibbonIcons();
     initEvents();
     els.boundaryInput.value = currentBoundary;
+    renderImageSizeOptions();
+    renderRegionPresetOptions();
     renderMapStyleOptions();
     renderCategoryEditors();
     setRows(sampleRows);
     await loadGeo();
     render();
+    switchDataTable(getSavedDataTable());
   }
 
   init();

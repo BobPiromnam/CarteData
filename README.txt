@@ -60,11 +60,11 @@ When opened from file://, CarteData uses the bundled local boundary data first. 
 The app still loads these online resources unless they are vendored locally:
 - D3 from jsDelivr
 - Papa Parse from jsDelivr
-- Optional map fonts from Google Fonts
+- Lato from Google Fonts
 
 Offline improvement
 -------------------
-To make the app fully offline and internal-network safe, download D3 and Papa Parse into a local vendor folder and update index.html to load the local files before app.js. If Google Fonts are not allowed, use system fonts or locally hosted approved fonts.
+To make the app fully offline and internal-network safe, download D3, Papa Parse and Lato into a local vendor folder and update index.html to load the local files before app.js.
 
 Known limitations
 -----------------
@@ -72,4 +72,4 @@ The label engine uses outside rails, sorting and collision checks. It reduces cr
 
 No server is required.
 No install is required.
-No data is uploaded by the app, except that current index.html loads external library and font files from the web unless those files are vendored locally.
+No data is uploaded by the app, except that current index.html loads external library and Lato font files from the web unless those files are vendored locally.

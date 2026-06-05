@@ -6,7 +6,7 @@
   <title>CarteData</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&family=Merriweather:wght@400;700&family=Noto+Sans:wght@400;700&family=Open+Sans:wght@400;700&family=Roboto:wght@400;700&family=Source+Sans+3:wght@400;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
   <link id="themeStylesheet" rel="stylesheet" href="themes/goc-green.css" />
 </head>
@@ -102,45 +102,36 @@
         </summary>
         <div class="workflow-body">
         <label>
-          Map title
-          <input id="mapTitleInput" type="text" value="Custom map" />
-        </label>
-        <label>
           Map font
           <select id="fontFamilyInput">
-            <option value="Lato, Arial, Helvetica, sans-serif">Lato</option>
-            <option value="Arial, Helvetica, sans-serif">Arial</option>
-            <option value="Noto Sans, Arial, Helvetica, sans-serif">Noto Sans</option>
-            <option value="Open Sans, Arial, Helvetica, sans-serif">Open Sans</option>
-            <option value="Source Sans 3, Arial, Helvetica, sans-serif">Source Sans 3</option>
-            <option value="Roboto, Arial, Helvetica, sans-serif">Roboto</option>
-            <option value="Merriweather, Georgia, serif">Merriweather</option>
-            <option value="Georgia, Times New Roman, serif">Georgia</option>
-            <option value="Verdana, Geneva, sans-serif">Verdana</option>
+            <option value="Lato">Lato</option>
           </select>
         </label>
         <div class="grid-2">
           <label>
-            Width
-            <span class="input-reset-row">
-              <input id="widthInput" type="number" min="900" max="2400" step="50" value="1600" />
-              <button class="reset-default-btn" type="button" data-reset-input="widthInput" aria-label="Reset width to default" title="Reset to default">↺</button>
-            </span>
+            Book size
+            <select id="bookSizeInput">
+              <option value="letter">8.5 x 11</option>
+              <option value="compact">6.5 x 9.75</option>
+            </select>
           </label>
           <label>
-            Height
-            <span class="input-reset-row">
-              <input id="heightInput" type="number" min="650" max="1600" step="50" value="1000" />
-              <button class="reset-default-btn" type="button" data-reset-input="heightInput" aria-label="Reset height to default" title="Reset to default">↺</button>
-            </span>
+            Image size
+            <select id="imageSizeInput">
+              <option value="full">Full (612 x 750)</option>
+              <option value="two-thirds">2/3 page (612 x 520)</option>
+              <option value="half">1/2 page (612 x 390)</option>
+              <option value="third">1/3 page (612 x 260)</option>
+              <option value="quarter">1/4 page (612 x 200)</option>
+            </select>
           </label>
         </div>
         <div class="grid-2">
           <label>
-            Label font size
+            Print label size (pt)
             <span class="input-reset-row">
-              <input id="labelSizeInput" type="number" min="10" max="30" step="1" value="16" />
-              <button class="reset-default-btn" type="button" data-reset-input="labelSizeInput" aria-label="Reset label font size to default" title="Reset to default">↺</button>
+              <input id="labelSizeInput" type="number" min="12" max="30" step="1" value="18" />
+              <button class="reset-default-btn" type="button" data-reset-input="labelSizeInput" aria-label="Reset print label size to default" title="Reset to default">↺</button>
             </span>
           </label>
           <label>
@@ -209,6 +200,7 @@
             <div class="table-tabs" role="tablist" aria-label="Data tables">
               <button id="projectTableTab" class="table-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="projectTablePane">Project points</button>
               <button id="regionTableTab" class="table-tab" type="button" role="tab" aria-selected="false" aria-controls="regionTablePane">Map regions</button>
+              <button id="previewTableTab" class="table-tab" type="button" role="tab" aria-selected="false" aria-controls="previewTablePane">Preview</button>
             </div>
           </div>
           <div class="button-row table-actions is-active" data-table-actions="projects">
@@ -274,10 +266,8 @@
                   <th class="region-name-col">Region</th>
                   <th class="region-included-col">Included</th>
                   <th class="region-count-col">Project count</th>
-                  <th class="region-value-col">Value</th>
-                  <th class="region-source-col">Source</th>
+                  <th class="region-value-col">Colour order</th>
                   <th class="region-preset-col">Colour preset</th>
-                  <th class="region-custom-col">Custom colour</th>
                   <th class="region-fill-col">Preview</th>
                 </tr>
               </thead>
@@ -285,15 +275,16 @@
             </table>
           </div>
         </div>
-      </div>
-
-      <div class="preview-panel">
-        <div class="preview-toolbar">
-          <strong>Preview</strong>
-          <span id="dependencyNote">Uses bundled boundary data. D3/Papa Parse load online unless vendored locally.</span>
-        </div>
-        <div id="mapHost" class="map-host">
-          <svg id="mapSvg" role="img"></svg>
+        <div id="previewTablePane" class="table-pane preview-table-pane" role="tabpanel" aria-labelledby="previewTableTab">
+          <div class="preview-panel">
+            <div class="preview-toolbar">
+              <strong>Preview</strong>
+              <span id="dependencyNote">Uses bundled boundary data. D3/Papa Parse load online unless vendored locally.</span>
+            </div>
+            <div id="mapHost" class="map-host">
+              <svg id="mapSvg" role="img"></svg>
+            </div>
+          </div>
         </div>
       </div>
     </section>
