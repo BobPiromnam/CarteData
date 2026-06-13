@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Plotypus">
+  <defs>
+    <linearGradient id="bodyGradient" x1="58" y1="30" x2="184" y2="225" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#bd7637"/>
+      <stop offset="0.54" stop-color="#a7622f"/>
+      <stop offset="1" stop-color="#8f5229"/>
+    </linearGradient>
+    <linearGradient id="billGradient" x1="68" y1="137" x2="188" y2="218" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5d5c57"/>
+      <stop offset="1" stop-color="#353530"/>
+    </linearGradient>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="5" stdDeviation="5" flood-color="#2f261d" flood-opacity="0.22"/>
+    </filter>
+  </defs>
+  <path fill="url(#bodyGradient)" filter="url(#softShadow)" d="M128 235c-9-13-24-25-38-39-29-29-50-66-50-105C40 37 79 18 128 18s88 19 88 73c0 39-21 76-50 105-14 14-29 26-38 39Z"/>
+  <path fill="#b66f34" d="M114 25c1-15 7-23 14-23s13 8 14 23c9-10 18-13 23-8 6 6 2 15-9 27h-56C89 32 85 23 91 17c5-5 14-2 23 8Z"/>
+  <path fill="none" stroke="#211a14" stroke-linecap="round" stroke-width="11" d="M76 109c8-16 27-16 36-1M144 108c9-15 28-15 36 1"/>
+  <path fill="url(#billGradient)" d="M73 148c5-22 28-31 55-31s50 9 55 31c3 12 3 30 10 43 7 14-3 29-19 34-27 9-65 9-92 0-16-5-26-20-19-34 7-13 7-31 10-43Z"/>
+  <path fill="#2c2b27" opacity="0.7" d="M61 189c28 22 106 22 134 0 0 18-15 29-39 34-18 4-38 4-56 0-24-5-39-16-39-34Z"/>
+  <circle cx="103" cy="180" r="7" fill="#271d16"/>
+  <circle cx="153" cy="180" r="7" fill="#271d16"/>
+</svg>

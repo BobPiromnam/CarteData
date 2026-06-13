@@ -30,7 +30,7 @@
   window.MAP_APP_STYLE_PRESETS = {
     "goc-green": {
       label: "GoC green",
-      stylesheet: "themes/goc-green.css",
+      stylesheet: "themes/goc-green.css?v=20260612-map-only",
       regionColours: ["#c7ded5", "#96c6b4", "#6caf94", "#078c70"],
       categoryStyles: [
         { colour: "#444444", stroke: "#ffffff", markerSize: 10, lineWidth: 2 },
@@ -40,7 +40,7 @@
     },
     "goc-blue": {
       label: "GoC blue",
-      stylesheet: "themes/goc-blue.css",
+      stylesheet: "themes/goc-blue.css?v=20260612-map-only",
       regionColours: ["#d7e5f5", "#9dbbe0", "#26374a"],
       categoryStyles: [
         { colour: "#26374a", stroke: "#ffffff", markerSize: 10, lineWidth: 2 },
@@ -50,7 +50,7 @@
     },
     "neutral-print": {
       label: "Neutral print",
-      stylesheet: "themes/neutral-print.css",
+      stylesheet: "themes/neutral-print.css?v=20260612-map-only",
       regionColours: ["#efefef", "#d8d8d8", "#bdbdbd"],
       categoryStyles: [
         { colour: "#222222", stroke: "#ffffff", markerSize: 10, lineWidth: 2 },
@@ -60,7 +60,7 @@
     },
     "high-contrast": {
       label: "High contrast",
-      stylesheet: "themes/high-contrast.css",
+      stylesheet: "themes/high-contrast.css?v=20260612-map-only",
       regionColours: ["#ffffff", "#d8d8d8", "#000000"],
       categoryStyles: [
         { colour: "#000000", stroke: "#ffffff", markerSize: 11, lineWidth: 3 },

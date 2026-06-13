@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Plotypus label smoke test</title>
+  <link rel="stylesheet" href="../style.css">
+  <style>
+    body {
+      margin: 0;
+      background: #ffffff;
+    }
+
+    #result {
+      position: absolute;
+      left: -9999px;
+      top: -9999px;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+    }
+
+    #appFrame {
+      position: absolute;
+      left: -9999px;
+      top: -9999px;
+      width: 1200px;
+      height: 900px;
+      border: 0;
+    }
+
+    #mapPreview {
+      width: max-content;
+      background: #ffffff;
+    }
+
+    #mapPreview svg {
+      display: block;
+      width: 900px;
+      height: auto;
+      max-width: none;
+      box-shadow: none;
+    }
+  </style>
+</head>
+<body>
+  <pre id="result">{"status":"pending"}</pre>
+  <iframe id="appFrame" src="../index.html"></iframe>
+  <div id="mapPreview"></div>
+  <script>
+    const resultNode = document.querySelector("#result");
+    const frame = document.querySelector("#appFrame");
+    const previewNode = document.querySelector("#mapPreview");
+    const params = new URLSearchParams(window.location.search);
+
+    function rectsOverlap(a, b) {
+      return Math.min(a.x1, b.x1) > Math.max(a.x0, b.x0)
+        && Math.min(a.y1, b.y1) > Math.max(a.y0, b.y0);
+    }
+
+    function getRect(node) {
+      const x = Number(node.getAttribute("x"));
+      const y = Number(node.getAttribute("y"));
+      const width = Number(node.getAttribute("width"));
+      const height = Number(node.getAttribute("height"));
+      return { x0: x, y0: y, x1: x + width, y1: y + height };
+    }
+
+    function getTranslate(node) {
+      const transform = node?.getAttribute("transform") || "";
+      const match = transform.match(/translate\(([-0-9.]+),\s*([-0-9.]+)\)/);
+      return match ? { x: Number(match[1]), y: Number(match[2]) } : { x: 0, y: 0 };
+    }
+
+    function getTranslatedRect(node) {
+      const rect = getRect(node);
+      const offset = getTranslate(node.closest("g"));
+      return {
+        x0: rect.x0 + offset.x,
+        y0: rect.y0 + offset.y,
+        x1: rect.x1 + offset.x,
+        y1: rect.y1 + offset.y
+      };
+    }
+
+    function rectOverlapArea(a, b) {
+      return Math.max(0, Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0))
+        * Math.max(0, Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0));
+    }
+
+    function rectArea(rect) {
+      return Math.max(0, rect.x1 - rect.x0) * Math.max(0, rect.y1 - rect.y0);
+    }
+
+    function rectGap(a, b) {
+      if (rectsOverlap(a, b)) return 0;
+      const dx = Math.max(0, Math.max(a.x0, b.x0) - Math.min(a.x1, b.x1));
+      const dy = Math.max(0, Math.max(a.y0, b.y0) - Math.min(a.y1, b.y1));
+      return Math.hypot(dx, dy);
+    }
+
+    function edgeDistance(rect, canvasRect) {
+      return Math.min(
+        rect.x0 - canvasRect.x0,
+        canvasRect.x1 - rect.x1,
+        rect.y0 - canvasRect.y0,
+        canvasRect.y1 - rect.y1
+      );
+    }
+
+    function svgBoxToRect(box) {
+      return { x0: box.x, y0: box.y, x1: box.x + box.width, y1: box.y + box.height };
+    }
+
+    function leaderSegment(path) {
+      const length = path.getTotalLength();
+      const sampleCount = Math.max(1, Math.ceil(length / 8));
+      const points = [];
+      for (let index = 0; index <= sampleCount; index += 1) {
+        const point = path.getPointAtLength(length * index / sampleCount);
+        points.push({ x: point.x, y: point.y });
+      }
+      const segments = [];
+      for (let index = 1; index < points.length; index += 1) {
+        segments.push({ start: points[index - 1], end: points[index] });
+      }
+      return {
+        start: points[0],
+        end: points[points.length - 1],
+        segments,
+        length
+      };
+    }
+
+    function samePoint(a, b) {
+      return Math.hypot(a.x - b.x, a.y - b.y) < 2;
+    }
+
+    function segmentsCross(a, b, c, d) {
+      if (samePoint(a, c) || samePoint(a, d) || samePoint(b, c) || samePoint(b, d)) return false;
+      function ccw(p1, p2, p3) {
+        return (p3.y - p1.y) * (p2.x - p1.x) > (p2.y - p1.y) * (p3.x - p1.x);
+      }
+      return ccw(a, c, d) !== ccw(b, c, d) && ccw(a, b, c) !== ccw(a, b, d);
+    }
+
+    function leaderSegmentsCross(a, b) {
+      return a.segments.some(segmentA => b.segments.some(segmentB => {
+        return segmentsCross(segmentA.start, segmentA.end, segmentB.start, segmentB.end);
+      }));
+    }
+
+    function normalizeLabelName(name) {
+      return String(name || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    }
+
+    function expectedReferenceSides(name) {
+      const normalized = normalizeLabelName(name);
+      const rules = [
+        [/mackenzie|red chris|ksi lisims|north coast|lng canada/, ["left"]],
+        [/grays|arctic/, ["top", "left"]],
+        [/northwest critical|mcilvenna/, ["bottom", "left"]],
+        [/pathways/, ["bottom"]],
+        [/taltson|churchill|iqaluit|alto|wind west|northcliff|contrecoeur/, ["right"]],
+        [/nouveau|darlington|crawford/, ["bottom", "right"]]
+      ];
+      const match = rules.find(([pattern]) => pattern.test(normalized));
+      return match ? match[1] : ["left", "right", "top", "bottom"];
+    }
+
+    function report(payload) {
+      resultNode.textContent = JSON.stringify(payload);
+      if (new URLSearchParams(window.location.search).has("download")) {
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "smoke-labels-result.json";
+        document.body.appendChild(link);
+        link.click();
+      }
+    }
+
+    function showRenderedMap(doc) {
+      const svg = doc.querySelector("#mapSvg");
+      if (!svg) return false;
+      const clone = svg.cloneNode(true);
+      clone.removeAttribute("style");
+      previewNode.innerHTML = "";
+      previewNode.appendChild(clone);
+      return true;
+    }
+
+    frame.addEventListener("load", () => {
+      window.setTimeout(() => {
+        try {
+          const doc = frame.contentDocument;
+          doc.querySelector("#previewTableTab")?.click();
+          const mapScaleInput = doc.querySelector("#mapScaleInput");
+          if (mapScaleInput) {
+            mapScaleInput.value = params.get("scale") || "60";
+            mapScaleInput.dispatchEvent(new Event("change", { bubbles: true }));
+          }
+          const labelSizeInput = doc.querySelector("#labelSizeInput");
+          if (labelSizeInput && params.has("labelSize")) {
+            labelSizeInput.value = params.get("labelSize");
+            labelSizeInput.dispatchEvent(new Event("change", { bubbles: true }));
+          }
+          const labelCharsInput = doc.querySelector("#labelCharsInput");
+          if (labelCharsInput && params.has("labelChars")) {
+            labelCharsInput.value = params.get("labelChars");
+            labelCharsInput.dispatchEvent(new Event("change", { bubbles: true }));
+          }
+          doc.querySelector("#ribbonAutoPlaceBtn")?.click();
+
+          const labelBackgrounds = Array.from(doc.querySelectorAll(".map-label-background"));
+          const mapLabels = Array.from(doc.querySelectorAll(".map-label"));
+          const labelTexts = new Map(Array.from(doc.querySelectorAll(".map-label")).map(label => [
+            label.getAttribute("data-layout-id"),
+            label.getAttribute("data-label-name") || label.textContent.replace(/\s+/g, " ").trim()
+          ]));
+          const labelFontSizes = mapLabels.map(label => Number(label.getAttribute("font-size")) || 0);
+          const rects = labelBackgrounds.map(getRect);
+          const labelRects = labelBackgrounds.map((node, index) => ({
+            name: labelTexts.get(node.getAttribute("data-layout-id")) || `label ${index}`,
+            side: node.getAttribute("data-label-side") || "",
+            rect: rects[index]
+          }));
+          const furnitureRects = Array.from(doc.querySelectorAll(".legend-box, .callout-box")).map(getTranslatedRect);
+          const mapLayer = doc.querySelector(".map-layer");
+          const mapRect = mapLayer ? svgBoxToRect(mapLayer.getBBox()) : null;
+          const viewBox = doc.querySelector("#mapSvg")?.viewBox?.baseVal;
+          const canvasRect = viewBox
+            ? { x0: viewBox.x, y0: viewBox.y, x1: viewBox.x + viewBox.width, y1: viewBox.y + viewBox.height }
+            : { x0: 0, y0: 0, x1: 1000, y1: 620 };
+          const leaderSegments = Array.from(doc.querySelectorAll(".leader-line")).map(path => ({
+            ...leaderSegment(path),
+            name: path.getAttribute("data-label-name") || labelTexts.get(path.getAttribute("data-layout-id")) || path.getAttribute("data-layout-id") || "leader",
+            side: path.getAttribute("data-label-side") || ""
+          }));
+          let overlaps = 0;
+          let furnitureOverlaps = 0;
+          let mapLabelOverlaps = 0;
+          let mapLabelOverlapArea = 0;
+          const labelOverlapPairs = [];
+          const furnitureOverlapNames = [];
+          const mapLabelOverlapNames = [];
+          const labelsNearCanvasEdge = [];
+          let minLabelGap = Number.POSITIVE_INFINITY;
+          for (let i = 0; i < rects.length; i += 1) {
+            for (let j = i + 1; j < rects.length; j += 1) {
+              if (rectsOverlap(rects[i], rects[j])) {
+                overlaps += 1;
+                labelOverlapPairs.push([
+                  labelTexts.get(labelBackgrounds[i].getAttribute("data-layout-id")) || `label ${i}`,
+                  labelTexts.get(labelBackgrounds[j].getAttribute("data-layout-id")) || `label ${j}`
+                ]);
+              }
+              minLabelGap = Math.min(minLabelGap, rectGap(rects[i], rects[j]));
+            }
+            if (edgeDistance(rects[i], canvasRect) < 8) {
+              labelsNearCanvasEdge.push(labelTexts.get(labelBackgrounds[i].getAttribute("data-layout-id")) || `label ${i}`);
+            }
+            furnitureRects.forEach(rect => {
+              if (rectsOverlap(rects[i], rect)) {
+                furnitureOverlaps += 1;
+                furnitureOverlapNames.push(labelTexts.get(labelBackgrounds[i].getAttribute("data-layout-id")) || `label ${i}`);
+              }
+            });
+            if (mapRect) {
+              const overlapArea = rectOverlapArea(rects[i], mapRect);
+              if (overlapArea / Math.max(1, rectArea(rects[i])) > 0.12) {
+                mapLabelOverlaps += 1;
+                mapLabelOverlapNames.push(labelTexts.get(labelBackgrounds[i].getAttribute("data-layout-id")) || `label ${i}`);
+              }
+              mapLabelOverlapArea += overlapArea;
+            }
+          }
+
+          let leaderCrossings = 0;
+          const leaderCrossingPairs = [];
+          const wrongSideLabels = [];
+          for (let i = 0; i < leaderSegments.length; i += 1) {
+            for (let j = i + 1; j < leaderSegments.length; j += 1) {
+              if (leaderSegmentsCross(leaderSegments[i], leaderSegments[j])) {
+                leaderCrossings += 1;
+                leaderCrossingPairs.push([leaderSegments[i].name, leaderSegments[j].name]);
+              }
+            }
+          }
+          mapLabels.forEach(label => {
+            const name = label.getAttribute("data-label-name") || label.textContent.replace(/\s+/g, " ").trim();
+            const actualSide = label.getAttribute("data-label-side");
+            const expectedSides = expectedReferenceSides(name);
+            if (!expectedSides.includes(actualSide)) {
+              wrongSideLabels.push({ name, actualSide, expectedSides });
+            }
+          });
+          const leaderLengthLimit = Math.max(360, (canvasRect.x1 - canvasRect.x0) * 0.38);
+          const longestLeader = leaderSegments.reduce((longest, segment) => {
+            return !longest || segment.length > longest.length ? segment : longest;
+          }, null);
+          const overlongLeaders = leaderSegments
+            .filter(segment => segment.length > leaderLengthLimit)
+            .map(segment => ({ name: segment.name, length: Math.round(segment.length), side: segment.side }));
+
+          const payload = {
+            status: "ok",
+            mapScale: mapScaleInput ? Number(mapScaleInput.value) : null,
+            renderedMapPreview: showRenderedMap(doc),
+            previewActive: doc.querySelector("#previewTablePane")?.classList.contains("is-active") || false,
+            labels: mapLabels.length,
+            minLabelFontSize: Math.min(...labelFontSizes),
+            labelBackgrounds: labelBackgrounds.length,
+            leaderLines: doc.querySelectorAll(".leader-line").length,
+            markers: doc.querySelectorAll(".marker-layer .marker").length,
+            labelOverlaps: overlaps,
+            furnitureOverlaps,
+            mapLabelOverlaps,
+            labelOverlapPairs,
+            furnitureOverlapNames,
+            mapLabelOverlapNames,
+            mapLabelOverlapArea: Math.round(mapLabelOverlapArea),
+            labelsNearCanvasEdge,
+            labelsNearCanvasEdgeCount: labelsNearCanvasEdge.length,
+            minLabelGap: Number.isFinite(minLabelGap) ? Math.round(minLabelGap) : null,
+            leaderCrossings,
+            leaderCrossingPairs,
+            labelRects,
+            leaderSegments,
+            mapRect,
+            wrongSideLabels,
+            wrongSideLabelCount: wrongSideLabels.length,
+            maxLeaderLength: Math.round(Math.max(0, ...leaderSegments.map(segment => segment.length))),
+            averageLeaderLength: Math.round(leaderSegments.reduce((sum, segment) => sum + segment.length, 0) / Math.max(1, leaderSegments.length)),
+            leaderLengthLimit: Math.round(leaderLengthLimit),
+            overlongLeaderCount: overlongLeaders.length,
+            overlongLeaders,
+            longestLeader: longestLeader ? { name: longestLeader.name, length: Math.round(longestLeader.length), side: longestLeader.side } : null,
+            statusText: (doc.querySelector("#statusBox")?.textContent || "").replace(/\s+/g, " ").trim().slice(0, 240)
+          };
+          report(payload);
+        } catch (error) {
+          report({ status: "error", message: error.message || String(error) });
+        }
+      }, 3000);
+    });
+  </script>
+</body>
+</html>

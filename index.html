@@ -4,26 +4,18 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Plotypus</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css" />
-  <link id="themeStylesheet" rel="stylesheet" href="themes/goc-green.css" />
+  <link rel="icon" href="assets/plotypus-mark.svg" type="image/svg+xml" />
+  <link rel="preload" href="assets/fonts/lato/lato-2.woff2" as="font" type="font/woff2" />
+  <link rel="preload" href="assets/fonts/lato/lato-4.woff2" as="font" type="font/woff2" />
+  <link rel="stylesheet" href="assets/fonts/lato/lato.css?v=20260612-file-fonts" />
+  <link rel="stylesheet" href="style.css?v=20260612-tabs-ux" />
+  <link id="themeStylesheet" rel="stylesheet" href="themes/goc-green.css?v=20260612-map-only" />
 </head>
 <body>
   <header class="app-header">
     <div class="app-ribbon" aria-label="Application actions">
       <div class="app-brand" aria-label="Application identity">
-        <svg class="app-logo" aria-hidden="true" viewBox="0 0 64 64" fill="none">
-          <rect class="logo-frame" x="6" y="8" width="52" height="48" rx="10" />
-          <path class="logo-panel logo-panel-left" d="M14 16 L28 12 V48 L14 52 Z" />
-          <path class="logo-panel logo-panel-mid" d="M28 12 L42 17 V53 L28 48 Z" />
-          <path class="logo-panel logo-panel-right" d="M42 17 L50 14 V49 L42 53 Z" />
-          <path class="logo-route" d="M18 41 C24 29 32 34 38 24 C41 20 45 22 48 18" />
-          <circle class="logo-node" cx="18" cy="41" r="3.2" />
-          <circle class="logo-node" cx="38" cy="24" r="3.2" />
-          <circle class="logo-node logo-node-accent" cx="48" cy="18" r="4" />
-        </svg>
+        <img class="app-logo" src="assets/plotypus-mark.svg" alt="" aria-hidden="true" width="56" height="56" />
         <div>
           <h1>Plotypus</h1>
           <p>CSV to static map</p>
@@ -46,7 +38,7 @@
       </div>
       <div class="ribbon-group" aria-label="Layout actions">
         <div class="ribbon-actions">
-          <button id="ribbonAutoPlaceBtn" class="ribbon-button" type="button" data-icon="wand">Auto-place labels</button>
+          <button id="ribbonAutoPlaceBtn" class="ribbon-button" type="button" data-icon="wand" title="Run auto-place for the current map size">Run auto-place</button>
         </div>
         <div class="ribbon-label">Layout</div>
       </div>
@@ -104,13 +96,15 @@
         <label>
           Map font
           <select id="fontFamilyInput">
-            <option value="Lato">Lato</option>
+            <option value="Lato, Segoe UI, Arial, sans-serif">Lato</option>
           </select>
         </label>
         <div class="grid-2">
           <label>
             Book size
             <select id="bookSizeInput">
+              <option value="wide-map">Wide map</option>
+              <option value="letter-landscape">11 x 8.5</option>
               <option value="letter">8.5 x 11</option>
               <option value="compact">6.5 x 9.75</option>
             </select>
@@ -118,7 +112,7 @@
           <label>
             Image size
             <select id="imageSizeInput">
-              <option value="full">Full (612 x 750)</option>
+              <option value="full">Full page (612 x 750)</option>
               <option value="two-thirds">2/3 page (612 x 520)</option>
               <option value="half">1/2 page (612 x 390)</option>
               <option value="third">1/3 page (612 x 260)</option>
@@ -130,10 +124,19 @@
           <label>
             Print label size (pt)
             <span class="input-reset-row">
-              <input id="labelSizeInput" type="number" min="12" max="30" step="1" value="18" />
+              <input id="labelSizeInput" type="number" min="12" max="30" step="1" value="12" />
               <button class="reset-default-btn" type="button" data-reset-input="labelSizeInput" aria-label="Reset print label size to default" title="Reset to default">↺</button>
             </span>
           </label>
+          <label>
+            Map size (%)
+            <span class="input-reset-row">
+              <input id="mapScaleInput" type="number" min="45" max="115" step="1" value="100" />
+              <button class="reset-default-btn" type="button" data-reset-input="mapScaleInput" aria-label="Reset map size to default" title="Reset to default">↺</button>
+            </span>
+          </label>
+        </div>
+        <div class="grid-2">
           <label>
             Default marker size
             <span class="input-reset-row">
@@ -153,28 +156,11 @@
           <label>
             Label max chars
             <span class="input-reset-row">
-              <input id="labelCharsInput" type="number" min="12" max="42" step="1" value="26" />
+              <input id="labelCharsInput" type="number" min="12" max="42" step="1" value="24" />
               <button class="reset-default-btn" type="button" data-reset-input="labelCharsInput" aria-label="Reset label max chars to default" title="Reset to default">↺</button>
             </span>
           </label>
         </div>
-        <label class="check-row">
-          <input id="showLegendInput" type="checkbox" checked />
-          Show legend
-        </label>
-        <label class="check-row">
-          <input id="showCalloutsInput" type="checkbox" checked />
-          Show items with no coordinates as callouts
-        </label>
-        <label class="check-row">
-          <input id="showLineCasingInput" type="checkbox" checked />
-          Add white casing behind leader lines
-        </label>
-        <label class="check-row">
-          <input id="lockMarkerCoordinatesInput" type="checkbox" checked />
-          Lock marker coordinates
-        </label>
-        <button id="renderBtn" type="button" class="primary">Auto-place labels</button>
         </div>
       </details>
 
@@ -196,7 +182,7 @@
       <div class="table-panel">
         <div class="table-toolbar">
           <div class="table-toolbar-main">
-            <strong id="tablePanelTitle">Project table</strong>
+            <strong id="tablePanelTitle">Project points</strong>
             <div class="table-tabs" role="tablist" aria-label="Data tables">
               <button id="projectTableTab" class="table-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="projectTablePane">Project points</button>
               <button id="regionTableTab" class="table-tab" type="button" role="tab" aria-selected="false" aria-controls="regionTablePane">Map regions</button>
@@ -204,13 +190,53 @@
             </div>
           </div>
           <div class="button-row table-actions is-active" data-table-actions="projects">
-            <button id="addRowBtn" type="button">Add row</button>
-            <button id="deleteSelectedBtn" type="button" disabled>Delete selected</button>
-            <button id="clearRowsBtn" type="button">Clear table</button>
+            <button id="addRowBtn" type="button" data-icon="plus">Add row</button>
+            <button id="deleteSelectedBtn" type="button" data-icon="trash" disabled>Delete selected</button>
+            <button id="clearRowsBtn" type="button" data-icon="eraser">Clear table</button>
           </div>
           <div class="button-row table-actions" data-table-actions="regions">
-            <button id="applyRegionValueColoursBtn" type="button">Apply colours</button>
-            <button id="resetRegionValuesBtn" type="button">Reset values</button>
+            <button id="applyRegionValueColoursBtn" type="button" data-icon="palette">Apply colours</button>
+            <button id="resetRegionValuesBtn" type="button" data-icon="reset">Reset values</button>
+          </div>
+          <div class="table-actions preview-actions" data-table-actions="preview">
+            <div class="toolbar-checks" aria-label="Preview display settings">
+              <label class="toolbar-check">
+                <input id="showLegendInput" type="checkbox" checked />
+                <span class="setting-icon" data-setting-icon="legend" aria-hidden="true"></span>
+                <span>Legend</span>
+              </label>
+              <label class="toolbar-check">
+                <input id="showCalloutsInput" type="checkbox" checked />
+                <span class="setting-icon" data-setting-icon="callout" aria-hidden="true"></span>
+                <span>No-coordinate callouts</span>
+              </label>
+              <label class="toolbar-check">
+                <input id="compactFurnitureInput" type="checkbox" checked />
+                <span class="setting-icon" data-setting-icon="box" aria-hidden="true"></span>
+                <span>Compact boxes</span>
+              </label>
+              <label class="toolbar-check">
+                <input id="showLineCasingInput" type="checkbox" checked />
+                <span class="setting-icon" data-setting-icon="line-casing" aria-hidden="true"></span>
+                <span>Line casing</span>
+              </label>
+              <label class="toolbar-check">
+                <input id="routeDenseLeadersInput" type="checkbox" />
+                <span class="setting-icon" data-setting-icon="elbow" aria-hidden="true"></span>
+                <span>Elbow leaders</span>
+              </label>
+              <label class="toolbar-check">
+                <input id="lockMarkerCoordinatesInput" type="checkbox" checked />
+                <span class="setting-icon" data-setting-icon="lock" aria-hidden="true"></span>
+                <span>Lock markers</span>
+              </label>
+              <label class="toolbar-check">
+                <input id="showDistanceMarkersInput" type="checkbox" />
+                <span class="setting-icon" data-setting-icon="ruler" aria-hidden="true"></span>
+                <span>Distance guides</span>
+              </label>
+            </div>
+            <span id="dependencyNote">Bundled boundary data</span>
           </div>
         </div>
         <div id="projectTablePane" class="table-pane is-active" role="tabpanel" aria-labelledby="projectTableTab">
@@ -221,6 +247,7 @@
                 <th class="name-col">Project name</th>
                 <th class="footnote-col" title="Footnote">Fn</th>
                 <th class="type-col">Type</th>
+                <th class="priority-col" title="Higher priority labels are placed earlier">Priority</th>
                 <th class="coordinate-col">Longitude</th>
                 <th class="coordinate-col">Latitude</th>
                 <th class="line-col">Hide line</th>
@@ -277,11 +304,32 @@
         </div>
         <div id="previewTablePane" class="table-pane preview-table-pane" role="tabpanel" aria-labelledby="previewTableTab">
           <div class="preview-panel">
-            <div class="preview-toolbar">
-              <strong>Preview</strong>
-              <span id="dependencyNote">Uses bundled boundary data. D3/Papa Parse load online unless vendored locally.</span>
-            </div>
             <div id="mapHost" class="map-host">
+              <div class="preview-loading" role="status" aria-live="polite">
+                <span class="plotypus-loader" aria-hidden="true">
+                  <svg viewBox="0 0 118 52" focusable="false">
+                    <path class="plotypus-loader-route" d="M8 38 C28 12 45 42 63 18 S91 11 110 31" />
+                    <g class="plotypus-loader-points">
+                      <circle cx="8" cy="38" r="3" />
+                      <circle cx="28" cy="21" r="3" />
+                      <circle cx="45" cy="35" r="3" />
+                      <circle cx="63" cy="18" r="3" />
+                      <circle cx="87" cy="15" r="3" />
+                      <circle cx="110" cy="31" r="3" />
+                    </g>
+                    <g class="plotypus-loader-pin">
+                      <path class="plotypus-loader-body" d="M0 25c-5-7-13-14-13-25 0-14 11-20 25-20S37-14 37 0c0 11-8 18-13 25l-12 14Z" />
+                      <path class="plotypus-loader-hair" d="M6-18c1-6 3-9 6-9s5 3 6 9c4-4 7-5 10-2 2 3 0 7-5 11H1c-5-4-7-8-5-11 3-3 6-2 10 2Z" />
+                      <path class="plotypus-loader-eye" d="M-8-2c4-7 12-7 16 0" />
+                      <path class="plotypus-loader-eye" d="M16-2c4-7 12-7 16 0" />
+                      <path class="plotypus-loader-bill" d="M-1 12c2-9 11-13 22-13s20 4 22 13c1 5 1 12 4 18 3 6-1 12-8 14-11 4-26 4-37 0-7-2-11-8-8-14 3-6 3-13 4-18Z" />
+                      <circle class="plotypus-loader-nostril" cx="11" cy="28" r="2" />
+                      <circle class="plotypus-loader-nostril" cx="31" cy="28" r="2" />
+                    </g>
+                  </svg>
+                </span>
+                <span>Plotting preview</span>
+              </div>
               <svg id="mapSvg" role="img"></svg>
             </div>
           </div>
@@ -292,9 +340,11 @@
 
   <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-  <script src="presets.js"></script>
+  <script src="presets.js?v=20260612-brand-ui-only"></script>
+  <script src="config.js?v=20260613-refactor-config"></script>
+  <script src="icons.js?v=20260613-refactor-icons"></script>
   <script src="assets/canada-regions.js"></script>
   <script src="assets/world-countries.js"></script>
-  <script src="app.js"></script>
+  <script src="app.js?v=20260613-refactor-config"></script>
 </body>
 </html>

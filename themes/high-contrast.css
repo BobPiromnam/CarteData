@@ -1,26 +1,10 @@
 :root {
-  --bg: #ffffff;
-  --panel: #ffffff;
-  --surface: #ffffff;
-  --surface-strong: #eeeeee;
-  --surface-hover: #eeeeee;
-  --ink: #000000;
-  --muted: #333333;
-  --border: #000000;
-  --border-strong: #000000;
-  --accent: #000000;
-  --accent-dark: #333333;
-  --accent-soft: #eeeeee;
-  --danger: #b00000;
-  --warning: #5c3b00;
-  --ok: #005a1f;
-  --focus: #000000;
-  --focus-ring: rgba(0, 0, 0, 0.20);
-  --workspace-grid: transparent;
-  --shadow: none;
-  --shadow-soft: none;
   --leader: #000000;
   --map-background: #ffffff;
   --map-boundary: #000000;
   --map-box-border: #000000;
+  --map-ink: #000000;
+  --map-muted: #333333;
+  --referred: #000000;
+  --strategy: #ffffff;
 }

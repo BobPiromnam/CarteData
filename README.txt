@@ -8,19 +8,23 @@ It is designed for non-technical users:
 1. Open index.html in Microsoft Edge.
 2. Use the Map regions table to choose the map boundary, include regions and adjust fills.
 3. Set legend markers and map style.
-4. Import CSV data, paste from Excel, load sample data, or open a saved project file.
-5. Review the Project points table and Map regions table.
-6. Auto-place labels, make manual adjustments if needed, then export SVG or PNG.
+4. Choose the fixed book/image size, then reduce Map size (%) if the geography needs more label room inside the print canvas. Distance markers can be shown or hidden while dragging.
+5. Import CSV data, paste from Excel, load sample data, or open a saved project file.
+6. Review the Project points table and Map regions table.
+7. Auto-place labels, make manual adjustments if needed, then export SVG or PNG.
 
 Files
 -----
 index.html - App shell.
 style.css - App styling.
-presets.js - Developer-editable map style, region colour and category colour presets.
+plotypus.config.json - Department-editable JSON defaults for hosted or local-server use.
+config.js - Bundled fallback defaults and JSON config loader.
+presets.js - Legacy developer-editable map style, region colour and category colour presets.
 app.js - D3 map logic, CSV handling, label placement, project save/load and export.
 sample-projects.csv - Sample data that can be edited in Excel.
 assets/ - Local boundary GeoJSON and JavaScript-wrapped fallback data.
 themes/ - CSS theme files used by map style presets.
+docs/configuration.md - Configuration guide for maintainers.
 
 CSV format
 ----------
@@ -41,7 +45,7 @@ Use hideLine values such as yes, true or no leader line to hide a leader line.
 
 Project files
 -------------
-Save project exports a JSON file with the map boundary, map style, layout settings, legend categories, project rows, region visibility, region fills, region values, manual region colour overrides and manual label/box positions.
+Save project exports a JSON file with the map boundary, map style, layout settings, map size, legend categories, project rows, region visibility, region fills, region values, manual region colour overrides and manual label/box positions.
 
 Use project files when you want to preserve the full map state. Use CSV when you only need to exchange the project-point table with Excel.
 
@@ -60,11 +64,20 @@ When opened from file://, Plotypus uses the bundled local boundary data first. W
 The app still loads these online resources unless they are vendored locally:
 - D3 from jsDelivr
 - Papa Parse from jsDelivr
-- Lato from Google Fonts
+
+Lato is bundled in assets/fonts/lato for local file:// use.
+
+Configuration
+-------------
+Departments can customize book sizes, image sizes, default map settings, map fonts, marker categories, colour presets, map styles and the sample table in plotypus.config.json.
+
+When index.html is opened directly from file://, browsers usually block loading sibling JSON files. In that mode Plotypus uses the defaults embedded in config.js. To use plotypus.config.json, serve the folder from a local/static web server or host the app internally.
+
+See docs/configuration.md for the editable fields and examples.
 
 Offline improvement
 -------------------
-To make the app fully offline and internal-network safe, download D3, Papa Parse and Lato into a local vendor folder and update index.html to load the local files before app.js.
+To make the app fully offline and internal-network safe, download D3 and Papa Parse into a local vendor folder and update index.html to load the local files before app.js.
 
 Known limitations
 -----------------
@@ -72,4 +85,4 @@ The label engine uses outside rails, sorting and collision checks. It reduces cr
 
 No server is required.
 No install is required.
-No data is uploaded by the app, except that current index.html loads external library and Lato font files from the web unless those files are vendored locally.
+No data is uploaded by the app, except that current index.html loads external D3 and Papa Parse files from the web unless those files are vendored locally.

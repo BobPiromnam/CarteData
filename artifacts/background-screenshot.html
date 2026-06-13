@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Plotypus background screenshot</title>
+  <link rel="stylesheet" href="../assets/fonts/lato/lato.css">
+  <link rel="stylesheet" href="../style.css">
+  <style>
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      background: var(--panel);
+    }
+
+    body {
+      padding: 24px;
+    }
+
+    .map-host {
+      width: 1180px;
+      height: 720px;
+      align-content: center;
+    }
+
+    #mapSvg {
+      width: 920px;
+      height: 560px;
+    }
+  </style>
+</head>
+<body>
+  <div id="mapHost" class="map-host">
+    <svg id="mapSvg" viewBox="0 0 920 560" role="img" aria-label="Canvas placeholder">
+      <rect width="920" height="560" fill="var(--map-background)" />
+    </svg>
+  </div>
+</body>
+</html>

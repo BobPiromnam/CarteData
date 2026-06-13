@@ -1,4 +1,10 @@
-(function () {
+(async function () {
+  const appConfig = window.PLOTYPUS_TEST_MODE
+    ? (window.PLOTYPUS_CONFIG || {})
+    : await (window.PLOTYPUS_CONFIG_READY || Promise.resolve(window.PLOTYPUS_CONFIG || {}));
+  const cloneConfigList = (items) => Array.isArray(items) ? items.map((item) => ({ ...item })) : [];
+  const defaultFontFamily = appConfig.defaultFontFamily || "Lato, Segoe UI, Arial, sans-serif";
+
   if (!window.d3) {
     const message = "Plotypus could not start because D3 did not load. Check network access or vendor D3 locally before opening this file offline.";
     const statusBox = document.querySelector("#statusBox");
@@ -6,56 +12,15 @@
     if (statusBox) statusBox.innerHTML = `<div class="status-danger">${message}</div>`;
     if (mapSvg) {
       mapSvg.setAttribute("viewBox", "0 0 900 360");
-      mapSvg.innerHTML = `<rect width="900" height="360" fill="#fff7e6"></rect><text x="450" y="180" text-anchor="middle" font-family="Lato" font-size="22" font-weight="700" fill="#8a1f11">${message}</text>`;
+      mapSvg.innerHTML = `<rect width="900" height="360" fill="#fff7e6"></rect><text x="450" y="180" text-anchor="middle" font-family="${defaultFontFamily}" font-size="22" font-weight="700" fill="#8a1f11">${message}</text>`;
     }
     return;
   }
 
-  const boundarySources = {
-    canada: {
-      label: "Canada provinces and territories",
-      url: "https://data.opendatasoft.com/api/explore/v2.1/catalog/datasets/georef-canada-province%40public/exports/geojson?lang=en&timezone=America%2FToronto",
-      fallbackUrl: "assets/canada-regions.geojson",
-      fallbackKey: "canada",
-      projection: "canada"
-    },
-    world: {
-      label: "World countries",
-      url: "https://datahub.io/core/geo-boundaries-world-110m/_r/-/countries.geojson",
-      fallbackUrl: "assets/world-countries.geojson",
-      fallbackKey: "world",
-      projection: "world"
-    }
-  };
-
-  const sampleRows = [
-    { name: "Grays Bay Road and Port", type: "Referred Project", lon: -108.4, lat: 68.5 },
-    { name: "Arctic Economic and Security Corridor", type: "Referred Project", lon: -112.5, lat: 64.5 },
-    { name: "Mackenzie Valley Highway", type: "Referred Project", lon: -124.0, lat: 65.5 },
-    { name: "Red Chris Mine Expansion", type: "Referred Project", lon: -129.9, lat: 57.7 },
-    { name: "Ksi Lisims LNG", type: "Referred Project", lon: -130.1, lat: 55.1 },
-    { name: "North Coast Transmission Line", type: "Referred Project", lon: -128.0, lat: 54.9 },
-    { name: "LNG Canada Phase 2", type: "Referred Project", lon: -128.65, lat: 54.05 },
-    { name: "Northwest Critical Conservation Corridor", type: "Transformative Strategy", lon: -130.0, lat: 58.2 },
-    { name: "Pathways Plus", type: "Transformative Strategy", lon: -111.4, lat: 56.7 },
-    { name: "McIlvenna Bay Copper Mine", type: "Referred Project", lon: -103.9, lat: 54.5 },
-    { name: "Crawford Nickel", type: "Referred Project", lon: -81.33, lat: 48.47 },
-    { name: "Darlington New Nuclear Project", type: "Referred Project", lon: -78.72, lat: 43.87 },
-    { name: "Nouveau Monde Graphite's Matawinie Mine", type: "Referred Project", lon: -73.92, lat: 46.68 },
-    { name: "Contrecoeur Terminal Container Project", type: "Transformative Strategy", lon: -73.23, lat: 45.85 },
-    { name: "Northcliff Resources' Sisson Mine", type: "Referred Project", lon: -67.25, lat: 46.35 },
-    { name: "Wind West Atlantic Energy", type: "Transformative Strategy", lon: -63.2, lat: 45.0 },
-    { name: "Iqaluit Hydro", type: "Referred Project", lon: -68.52, lat: 63.75 },
-    { name: "Port of Churchill Plus", type: "Transformative Strategy", lon: -94.17, lat: 58.77 },
-    { name: "Taltson Hydro Expansion Project", type: "Referred Project", lon: -111.0, lat: 60.5 },
-    { name: "Alto High-Speed Rail, Ontario-Quebec Corridor", type: "Transformative Strategy", lon: -74.5, lat: 45.8 },
-    { name: "Critical Minerals Strategy", type: "Transformative Strategy", lon: "", lat: "" }
-  ];
-
-  // Safety defaults only. Policy-editable colours belong in presets.js.
   const fallbackRegionColours = ["#c7ded5", "#96c6b4", "#6caf94", "#078c70"];
-
-  const mapStylePresets = window.MAP_APP_STYLE_PRESETS || {
+  const boundarySources = appConfig.boundarySources || {};
+  const sampleRows = cloneConfigList(appConfig.sampleRows);
+  const mapStylePresets = appConfig.mapStylePresets || window.MAP_APP_STYLE_PRESETS || appConfig.fallbackMapStylePresets || {
     "goc-green": {
       label: "GoC green",
       stylesheet: "themes/goc-green.css",
@@ -66,148 +31,38 @@
       ]
     }
   };
-
-  const csvColumnAliases = {
+  const csvColumnAliases = appConfig.csvColumnAliases || {
     name: ["name", "project", "project name"],
     footnote: ["footnote", "footnote marker", "note", "superscript"],
     type: ["type", "category", "project type"],
+    priority: ["priority", "label priority", "importance", "rank"],
     lon: ["lon", "longitude", "long"],
     lat: ["lat", "latitude"],
     hideLine: ["hide line", "hide lines", "hideline", "no line", "no leader line"]
   };
-
-  const tableFields = ["name", "footnote", "type", "lon", "lat"];
-
-  const layoutDefaults = {
-    bookSizeInput: "letter",
+  const tableFields = appConfig.tableFields || ["name", "footnote", "type", "priority", "lon", "lat"];
+  const layoutDefaults = appConfig.layoutDefaults || {
+    bookSizeInput: "wide-map",
     imageSizeInput: "full",
-    labelSizeInput: 18,
+    labelSizeInput: 12,
+    mapScaleInput: 100,
     markerSizeInput: 10,
     lineWidthInput: 2,
-    labelCharsInput: 26
+    labelCharsInput: 24
   };
-  const activeTableStorageKey = "plotypus.activeTable";
-  const dataTableNames = ["projects", "regions", "preview"];
-
-  const imageSizePresets = {
-    letter: {
-      label: "8.5 x 11",
-      sizes: [
-        { value: "full", label: "Full", width: 612, height: 750 },
-        { value: "two-thirds", label: "2/3 page", width: 612, height: 520 },
-        { value: "half", label: "1/2 page", width: 612, height: 390 },
-        { value: "third", label: "1/3 page", width: 612, height: 260 },
-        { value: "quarter", label: "1/4 page", width: 612, height: 200 }
-      ]
-    },
-    compact: {
-      label: "6.5 x 9.75",
-      sizes: [
-        { value: "full", label: "Full", width: 468, height: 700 },
-        { value: "two-thirds", label: "2/3 page", width: 468, height: 468 },
-        { value: "half", label: "1/2 page", width: 468, height: 350 },
-        { value: "third", label: "1/3 page", width: 468, height: 235 },
-        { value: "quarter", label: "1/4 page", width: 468, height: 175 }
-      ]
-    }
-  };
-
-  const regionPresetOptions = {
-    canada: [
-      { value: "", label: "Choose preset" },
-      { value: "all", label: "All Canada" },
-      { value: "territories", label: "Territories" },
-      { value: "western", label: "Western Canada" },
-      { value: "prairies", label: "Prairies" },
-      { value: "central", label: "Central Canada" },
-      { value: "atlantic", label: "Atlantic Canada" }
-    ],
-    world: [
-      { value: "", label: "Choose continent" },
-      { value: "all", label: "All countries" },
-      { value: "africa", label: "Africa" },
-      { value: "antarctica", label: "Antarctica" },
-      { value: "asia", label: "Asia" },
-      { value: "europe", label: "Europe" },
-      { value: "north-america", label: "North America" },
-      { value: "oceania", label: "Oceania" },
-      { value: "south-america", label: "South America" }
-    ]
-  };
-
-  const markerShapes = [
-    { value: "circle", label: "Circle" },
-    { value: "square", label: "Square" },
-    { value: "diamond", label: "Diamond" },
-    { value: "triangle-up", label: "Triangle up" },
-    { value: "triangle-down", label: "Triangle down" },
-    { value: "star", label: "Star" },
-    { value: "plus", label: "Plus" },
-    { value: "cross", label: "Cross" }
-  ];
-
-  const colourPresets = window.MAP_APP_CATEGORY_COLOUR_PRESETS || [
-    { value: "", label: "Custom" },
-    { value: "#26374a", label: "GoC blue" },
-    { value: "#284162", label: "Deep blue" },
-    { value: "#1c578a", label: "Accessible blue" },
-    { value: "#217346", label: "Excel green" },
-    { value: "#0b6b57", label: "Map green" },
-    { value: "#7834bc", label: "Purple" },
-    { value: "#a05a00", label: "Ochre" },
-    { value: "#d3080c", label: "Alert red" },
-    { value: "#444444", label: "Charcoal" },
-    { value: "#ffffff", label: "White" }
-  ];
-
-  const iconPaths = {
-    "folder-open": [
-      '<path d="M3 7.5V6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1.5"/>',
-      '<path d="M3.6 18.5 5.2 10h16l-1.6 8.5a2 2 0 0 1-2 1.5h-12a2 2 0 0 1-2-1.5Z"/>'
-    ],
-    save: [
-      '<path d="M5 3h12l2 2v16H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/>',
-      '<path d="M7 3v6h9V3"/>',
-      '<path d="M7 21v-7h10v7"/>'
-    ],
-    table: [
-      '<rect x="3" y="4" width="18" height="16" rx="2"/>',
-      '<path d="M3 10h18"/>',
-      '<path d="M9 4v16"/>',
-      '<path d="M15 4v16"/>'
-    ],
-    upload: [
-      '<path d="M12 16V4"/>',
-      '<path d="m7 9 5-5 5 5"/>',
-      '<path d="M4 20h16"/>'
-    ],
-    download: [
-      '<path d="M12 4v12"/>',
-      '<path d="m7 11 5 5 5-5"/>',
-      '<path d="M4 20h16"/>'
-    ],
-    wand: [
-      '<path d="m14 4 6 6"/>',
-      '<path d="m5 19 9-9"/>',
-      '<path d="m13 5 6 6"/>',
-      '<path d="M5 5h2"/>',
-      '<path d="M6 4v2"/>',
-      '<path d="M19 17h2"/>',
-      '<path d="M20 16v2"/>'
-    ],
-    "svg-file": [
-      '<path d="M6 3h8l4 4v14H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/>',
-      '<path d="M14 3v5h5"/>',
-      '<path d="M8 15h2l1 2 1-2h2"/>'
-    ],
-    image: [
-      '<rect x="3" y="5" width="18" height="14" rx="2"/>',
-      '<circle cx="8" cy="10" r="1.5"/>',
-      '<path d="m21 16-5-5L5 19"/>'
-    ]
-  };
-
-  const categorySettings = [
+  const storageKeys = appConfig.storageKeys || {};
+  const activeTableStorageKey = storageKeys.activeTable || "plotypus.activeTable";
+  const layoutPreferencesStorageKey = storageKeys.layoutPreferences || "plotypus.layoutPreferences";
+  const dataTableNames = appConfig.dataTableNames || ["projects", "regions", "preview"];
+  const imageSizePresets = appConfig.imageSizePresets || {};
+  const regionPresetOptions = appConfig.regionPresetOptions || { canada: [], world: [] };
+  const markerShapes = cloneConfigList(appConfig.markerShapes);
+  const configuredColourPresets = cloneConfigList(appConfig.categoryColourPresets);
+  const colourPresets = configuredColourPresets.length ? configuredColourPresets : window.MAP_APP_CATEGORY_COLOUR_PRESETS || [];
+  const fontOptions = cloneConfigList(appConfig.fontOptions);
+  const iconPaths = window.PLOTYPUS_ICON_PATHS || {};
+  const configuredCategorySettings = cloneConfigList(appConfig.categorySettings);
+  const categorySettings = configuredCategorySettings.length ? configuredCategorySettings : [
     {
       id: "referred",
       label: "Referred Project",
@@ -270,19 +125,23 @@
     addRowBtn: document.querySelector("#addRowBtn"),
     deleteSelectedBtn: document.querySelector("#deleteSelectedBtn"),
     clearRowsBtn: document.querySelector("#clearRowsBtn"),
-    renderBtn: document.querySelector("#renderBtn"),
     exportSvgBtn: document.querySelector("#exportSvgBtn"),
     exportPngBtn: document.querySelector("#exportPngBtn"),
     bookSizeInput: document.querySelector("#bookSizeInput"),
     imageSizeInput: document.querySelector("#imageSizeInput"),
+    mapHost: document.querySelector("#mapHost"),
     labelSizeInput: document.querySelector("#labelSizeInput"),
+    mapScaleInput: document.querySelector("#mapScaleInput"),
     markerSizeInput: document.querySelector("#markerSizeInput"),
     lineWidthInput: document.querySelector("#lineWidthInput"),
     labelCharsInput: document.querySelector("#labelCharsInput"),
     fontFamilyInput: document.querySelector("#fontFamilyInput"),
     showLegendInput: document.querySelector("#showLegendInput"),
     showCalloutsInput: document.querySelector("#showCalloutsInput"),
+    compactFurnitureInput: document.querySelector("#compactFurnitureInput"),
     showLineCasingInput: document.querySelector("#showLineCasingInput"),
+    routeDenseLeadersInput: document.querySelector("#routeDenseLeadersInput"),
+    showDistanceMarkersInput: document.querySelector("#showDistanceMarkersInput"),
     lockMarkerCoordinatesInput: document.querySelector("#lockMarkerCoordinatesInput"),
     categoryList: document.querySelector("#categoryList"),
     addCategoryBtn: document.querySelector("#addCategoryBtn"),
@@ -309,16 +168,56 @@
   let regionFills = {};
   let regionValues = {};
   let regionColourOverrides = {};
-  let currentMapStylePreset = "goc-green";
+  const defaultMapStylePreset = appConfig.defaultMapStylePreset || Object.keys(mapStylePresets)[0] || "goc-green";
+  let currentMapStylePreset = defaultMapStylePreset;
   let currentBoundary = "canada";
   let renderOutputMode = "web";
+  let mapScaleControlsVisible = false;
+  let draggedCategoryId = null;
+  let activeCategoryDropEditor = null;
+  let activeCategoryDropPlacement = null;
+  let pendingRenderFrame = null;
+  let pendingRenderOptions = null;
 
   function on(element, eventName, handler) {
     if (element) element.addEventListener(eventName, handler);
   }
 
+  function setPreviewBusy(isBusy) {
+    if (!els.mapHost) return;
+    els.mapHost.classList.toggle("is-rendering", Boolean(isBusy));
+    els.mapHost.setAttribute("aria-busy", isBusy ? "true" : "false");
+  }
+
+  function mergeRenderOptions(current, next) {
+    return {
+      ...(current || {}),
+      ...(next || {}),
+      autoPlace: Boolean((current && current.autoPlace) || (next && next.autoPlace))
+    };
+  }
+
+  function scheduleRender(options = {}) {
+    pendingRenderOptions = mergeRenderOptions(pendingRenderOptions, options);
+    setPreviewBusy(true);
+    if (pendingRenderFrame !== null) return;
+
+    pendingRenderFrame = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const renderOptions = pendingRenderOptions || {};
+        pendingRenderFrame = null;
+        pendingRenderOptions = null;
+        try {
+          render(renderOptions);
+        } finally {
+          setPreviewBusy(false);
+        }
+      });
+    });
+  }
+
   function getMapStylePreset(presetId = currentMapStylePreset) {
-    return mapStylePresets[presetId] || mapStylePresets["goc-green"];
+    return mapStylePresets[presetId] || mapStylePresets[defaultMapStylePreset] || Object.values(mapStylePresets)[0];
   }
 
   function getCurrentRegionColourSet() {
@@ -360,6 +259,15 @@
           ${icon.join("")}
         </svg>
         <span>${escapeHtml(label)}</span>
+      `;
+    });
+    document.querySelectorAll("[data-setting-icon]").forEach(iconSlot => {
+      const icon = iconPaths[iconSlot.dataset.settingIcon];
+      if (!icon || iconSlot.querySelector("svg")) return;
+      iconSlot.innerHTML = `
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          ${icon.join("")}
+        </svg>
       `;
     });
   }
@@ -448,11 +356,17 @@
           </div>
           <button class="toggle-category-btn icon-button" type="button" data-category-id="${escapeHtml(category.id)}" aria-label="${category.collapsed ? "Expand" : "Collapse"} ${escapeHtml(category.label)}" title="${category.collapsed ? "Expand" : "Collapse"}">${category.collapsed ? "▸" : "▾"}</button>
           <div class="category-actions">
-            <span class="category-order-actions">
-              <button class="move-category-btn icon-button" type="button" data-category-id="${escapeHtml(category.id)}" data-direction="up" aria-label="Move ${escapeHtml(category.label)} up" title="Move up"${index === 0 ? " disabled" : ""}>↑</button>
-              <button class="move-category-btn icon-button" type="button" data-category-id="${escapeHtml(category.id)}" data-direction="down" aria-label="Move ${escapeHtml(category.label)} down" title="Move down"${index === categorySettings.length - 1 ? " disabled" : ""}>↓</button>
-            </span>
-            ${category.removable ? `<button class="remove-category-btn icon-button" type="button" data-category-id="${escapeHtml(category.id)}" aria-label="Remove ${escapeHtml(category.label)}" title="Remove">×</button>` : ""}
+            <button class="category-drag-handle icon-button" type="button" draggable="true" data-category-id="${escapeHtml(category.id)}" aria-label="Drag ${escapeHtml(category.label)} to reorder" title="Drag to reorder">
+              <svg class="category-grip-icon" aria-hidden="true" viewBox="0 0 24 24" fill="currentColor">
+                <circle cx="9" cy="6" r="1.8"></circle>
+                <circle cx="15" cy="6" r="1.8"></circle>
+                <circle cx="9" cy="12" r="1.8"></circle>
+                <circle cx="15" cy="12" r="1.8"></circle>
+                <circle cx="9" cy="18" r="1.8"></circle>
+                <circle cx="15" cy="18" r="1.8"></circle>
+              </svg>
+            </button>
+            <button class="remove-category-btn icon-button" type="button" data-category-id="${escapeHtml(category.id)}" aria-label="Remove ${escapeHtml(category.label)}" title="Remove"${categorySettings.length <= 1 ? " disabled" : ""}>×</button>
           </div>
         </div>
         <div class="category-body category-form">
@@ -501,6 +415,12 @@
     return ["1", "true", "yes", "y", "hide", "hidden", "no line", "no leader line"].includes(raw);
   }
 
+  function toPriority(value) {
+    if (value === null || value === undefined || value === "") return 0;
+    const priority = Math.round(Number(String(value).trim()));
+    return Number.isFinite(priority) ? Math.max(0, Math.min(5, priority)) : 0;
+  }
+
   function normalizeFootnote(value) {
     return String(value || "").trim();
   }
@@ -529,6 +449,7 @@
       name: String(getField(row, csvColumnAliases.name) || "").trim(),
       footnote: normalizeFootnote(getField(row, csvColumnAliases.footnote)),
       type: cleanType(getField(row, csvColumnAliases.type) || getDefaultCategory().label),
+      priority: toPriority(getField(row, csvColumnAliases.priority)),
       lon: toNumber(getField(row, csvColumnAliases.lon)),
       lat: toNumber(getField(row, csvColumnAliases.lat)),
       hideLine: toBoolean(getField(row, csvColumnAliases.hideLine))
@@ -550,9 +471,10 @@
     if (options.render !== false) render();
   }
 
-  function addRow(row = { name: "", footnote: "", type: "referred", lon: "", lat: "", hideLine: false }) {
+  function addRow(row = { name: "", footnote: "", type: getDefaultCategory().id, priority: 0, lon: "", lat: "", hideLine: false }) {
     const tr = document.createElement("tr");
     const rowId = row.rowId ? String(row.rowId) : String(nextRowId);
+    const priority = toPriority(row.priority);
     tr.dataset.rowId = rowId;
     const numericRowId = Number(rowId);
     nextRowId = Number.isFinite(numericRowId) ? Math.max(nextRowId, numericRowId + 1) : nextRowId + 1;
@@ -564,6 +486,7 @@
           ${getTypeOptions(row.type)}
         </select>
       </td>
+      <td><input class="priority-input" type="number" min="0" max="5" step="1" value="${priority}" aria-label="Label priority"></td>
       <td><input class="lon-input" type="number" step="any" value="${row.lon === "" ? "" : row.lon}" aria-label="Longitude"></td>
       <td><input class="lat-input" type="number" step="any" value="${row.lat === "" ? "" : row.lat}" aria-label="Latitude"></td>
       <td class="line-cell"><input type="checkbox" class="hide-line-input" aria-label="Hide leader line"${row.hideLine ? " checked" : ""}></td>
@@ -614,6 +537,7 @@
       name: tr.querySelector(".name-input").value.trim(),
       footnote: normalizeFootnote(tr.querySelector(".footnote-input").value),
       type: cleanType(tr.querySelector(".type-input").value),
+      priority: toPriority(tr.querySelector(".priority-input").value),
       lon: toNumber(tr.querySelector(".lon-input").value),
       lat: toNumber(tr.querySelector(".lat-input").value),
       hideLine: tr.querySelector(".hide-line-input").checked
@@ -627,6 +551,10 @@
   function getImageSizePreset(bookSizeValue = els.bookSizeInput.value, imageSizeValue = els.imageSizeInput.value) {
     const book = getBookSizePreset(bookSizeValue);
     return book.sizes.find(size => size.value === imageSizeValue) || book.sizes[0];
+  }
+
+  function formatImageSizeOption(size) {
+    return `${size.label} (${size.width} x ${size.height})`;
   }
 
   function findImageSizePresetByDimensions(width, height) {
@@ -646,9 +574,29 @@
     const currentValue = els.imageSizeInput.value;
     const book = getBookSizePreset();
     els.imageSizeInput.innerHTML = book.sizes.map(size => (
-      `<option value="${escapeHtml(size.value)}">${escapeHtml(size.label)} (${size.width} x ${size.height})</option>`
+      `<option value="${escapeHtml(size.value)}">${escapeHtml(formatImageSizeOption(size))}</option>`
     )).join("");
     els.imageSizeInput.value = book.sizes.some(size => size.value === currentValue) ? currentValue : layoutDefaults.imageSizeInput;
+  }
+
+  function renderBookSizeOptions() {
+    const currentValue = els.bookSizeInput.value;
+    const bookEntries = Object.entries(imageSizePresets);
+    els.bookSizeInput.innerHTML = bookEntries.map(([value, preset]) => (
+      `<option value="${escapeHtml(value)}">${escapeHtml(preset.label || value)}</option>`
+    )).join("");
+    els.bookSizeInput.value = imageSizePresets[currentValue] ? currentValue : layoutDefaults.bookSizeInput;
+  }
+
+  function renderFontOptions() {
+    const fonts = fontOptions.length ? fontOptions : [{ label: "Lato", value: defaultFontFamily }];
+    const currentValue = normalizeFontFamily(els.fontFamilyInput.value);
+    els.fontFamilyInput.innerHTML = fonts.map((font) => (
+      `<option value="${escapeHtml(font.value || font.label)}">${escapeHtml(font.label || font.value)}</option>`
+    )).join("");
+    els.fontFamilyInput.value = fonts.some(font => normalizeFontFamily(font.value || font.label) === currentValue)
+      ? currentValue
+      : defaultFontFamily;
   }
 
   function applyImageSizePreset(bookValue, imageSizeValue) {
@@ -658,6 +606,43 @@
     els.imageSizeInput.value = book.sizes.some(size => size.value === imageSizeValue) ? imageSizeValue : layoutDefaults.imageSizeInput;
   }
 
+  function normalizeLayoutPreferences(preferences = {}) {
+    const bookSize = imageSizePresets[preferences.bookSize] ? preferences.bookSize : layoutDefaults.bookSizeInput;
+    const book = getBookSizePreset(bookSize);
+    const imageSize = book.sizes.some(size => size.value === preferences.imageSize)
+      ? preferences.imageSize
+      : layoutDefaults.imageSizeInput;
+    return { bookSize, imageSize };
+  }
+
+  function getSavedLayoutPreferences() {
+    try {
+      const raw = window.localStorage.getItem(layoutPreferencesStorageKey);
+      if (!raw) return null;
+      return normalizeLayoutPreferences(JSON.parse(raw));
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function applySavedLayoutPreferences() {
+    const preferences = getSavedLayoutPreferences();
+    if (!preferences) return false;
+    applyImageSizePreset(preferences.bookSize, preferences.imageSize);
+    return true;
+  }
+
+  function saveLayoutPreferences() {
+    try {
+      window.localStorage.setItem(layoutPreferencesStorageKey, JSON.stringify(normalizeLayoutPreferences({
+        bookSize: els.bookSizeInput.value,
+        imageSize: els.imageSizeInput.value
+      })));
+    } catch (error) {
+      // Private browsing or file restrictions should not block the editor.
+    }
+  }
+
   function normalizeLabelSizePt(value) {
     const parsed = Number(value);
     const fallback = layoutDefaults.labelSizeInput;
@@ -665,18 +650,33 @@
     return Math.max(12, Math.min(30, labelSize));
   }
 
+  function normalizeMapScale(value) {
+    const parsed = Number(value);
+    const fallback = layoutDefaults.mapScaleInput;
+    const mapScale = Number.isFinite(parsed) ? parsed : fallback;
+    return Math.max(45, Math.min(115, mapScale));
+  }
+
+  const defaultPrintLabelSizePt = 18;
+  const defaultWebLabelSizePx = 12;
+  const minimumWebLabelSizePx = 12;
+  const webLabelSizeScale = defaultWebLabelSizePx / defaultPrintLabelSizePt;
+
   function getWebLabelSize(printPt) {
-    // CSS standard: 1pt = 72/96px on a 96dpi screen.
-    // The SVG is also CSS-scaled up (width:100%, min-width:1000px) from the
-    // 612-unit viewBox, so using the raw pt value makes labels appear too large.
-    // normalizeLabelSizePt already clamps printPt to [12, 30].
-    return Math.round(printPt * (72 / 96));
+    // Keep the control in print points, but never render map text below 12 px.
+    return Math.max(minimumWebLabelSizePx, Math.round(printPt * webLabelSizeScale));
+  }
+
+  function normalizeFontFamily(value) {
+    const fontFamily = String(value || "").trim();
+    return fontFamily && fontFamily !== "Lato" ? fontFamily : defaultFontFamily;
   }
 
   function getSettings(options = {}) {
     const imageSize = getImageSizePreset();
     const outputMode = options.outputMode || renderOutputMode;
     const labelSizePt = normalizeLabelSizePt(els.labelSizeInput.value);
+    const mapScale = normalizeMapScale(els.mapScaleInput.value);
     return {
       outputMode,
       bookSize: imageSizePresets[els.bookSizeInput.value] ? els.bookSizeInput.value : layoutDefaults.bookSizeInput,
@@ -687,13 +687,17 @@
       labelSizePt,
       labelSize: labelSizePt,
       labelSizeRender: outputMode === "print" ? labelSizePt : getWebLabelSize(labelSizePt),
+      mapScale,
       markerSize: Number(els.markerSizeInput.value) || 10,
       lineWidth: Number(els.lineWidthInput.value) || 2,
       labelMaxChars: Number(els.labelCharsInput.value) || 26,
-      fontFamily: "Lato",
+      fontFamily: normalizeFontFamily(els.fontFamilyInput.value),
       showLegend: els.showLegendInput.checked,
       showCallouts: els.showCalloutsInput.checked,
+      compactFurniture: els.compactFurnitureInput.checked,
       showLineCasing: els.showLineCasingInput.checked,
+      routeDenseLeaders: els.routeDenseLeadersInput.checked,
+      showDistanceMarkers: els.showDistanceMarkersInput.checked,
       lockMarkerCoordinates: els.lockMarkerCoordinatesInput.checked
     };
   }
@@ -707,13 +711,17 @@
     if (settings.labelSizePt !== undefined || settings.labelSize !== undefined) {
       els.labelSizeInput.value = normalizeLabelSizePt(settings.labelSizePt !== undefined ? settings.labelSizePt : settings.labelSize);
     }
+    if (settings.mapScale !== undefined) els.mapScaleInput.value = normalizeMapScale(settings.mapScale);
     if (settings.markerSize !== undefined) els.markerSizeInput.value = settings.markerSize;
     if (settings.lineWidth !== undefined) els.lineWidthInput.value = settings.lineWidth;
     if (settings.labelMaxChars !== undefined) els.labelCharsInput.value = settings.labelMaxChars;
-    els.fontFamilyInput.value = "Lato";
+    els.fontFamilyInput.value = normalizeFontFamily(settings.fontFamily);
     if (settings.showLegend !== undefined) els.showLegendInput.checked = Boolean(settings.showLegend);
     if (settings.showCallouts !== undefined) els.showCalloutsInput.checked = Boolean(settings.showCallouts);
+    if (settings.compactFurniture !== undefined) els.compactFurnitureInput.checked = Boolean(settings.compactFurniture);
     if (settings.showLineCasing !== undefined) els.showLineCasingInput.checked = Boolean(settings.showLineCasing);
+    if (settings.routeDenseLeaders !== undefined) els.routeDenseLeadersInput.checked = Boolean(settings.routeDenseLeaders);
+    if (settings.showDistanceMarkers !== undefined) els.showDistanceMarkersInput.checked = Boolean(settings.showDistanceMarkers);
     if (settings.lockMarkerCoordinates !== undefined) els.lockMarkerCoordinatesInput.checked = Boolean(settings.lockMarkerCoordinates);
   }
 
@@ -1029,7 +1037,7 @@
     const shouldApplyMapColours = options.applyMapColours !== false;
     const shouldRender = options.render !== false;
 
-    currentMapStylePreset = Object.prototype.hasOwnProperty.call(mapStylePresets, presetId) ? presetId : "goc-green";
+    currentMapStylePreset = Object.prototype.hasOwnProperty.call(mapStylePresets, presetId) ? presetId : defaultMapStylePreset;
     els.mapStylePresetInput.value = currentMapStylePreset;
     els.themeStylesheet.setAttribute("href", preset.stylesheet);
 
@@ -1082,8 +1090,14 @@
   function preferredSide(d, settings, mapBounds) {
     if (currentBoundary === "canada") {
       const name = labelKeyText(d);
-      if (name.includes("grays") || name.includes("arctic") || name.includes("mackenzie")) return "top";
-      if (name.includes("taltson") || name.includes("churchill")) return "right";
+      if (name.includes("mackenzie")) return "left";
+      if (name.includes("red chris") || name.includes("ksi lisims") || name.includes("north coast") || name.includes("lng canada")) return "left";
+      if (name.includes("grays") || name.includes("arctic")) return "top";
+      if (name.includes("northwest critical")) return "left";
+      if (name.includes("pathways") || name.includes("mcilvenna")) return "bottom";
+      if (name.includes("taltson") || name.includes("churchill") || name.includes("iqaluit") || name.includes("alto") || name.includes("wind west")) return "right";
+      if (name.includes("northcliff") || name.includes("contrecoeur")) return "right";
+      if (name.includes("nouveau") || name.includes("darlington") || name.includes("crawford")) return "bottom";
       if (d.lon >= -116 && d.lon <= -108 && d.lat >= 59) return "right";
       if (d.lon >= -116 && d.lon <= -108 && d.lat >= 55) return "bottom";
       if (d.lon >= -106 && d.lon <= -100 && d.lat >= 53 && d.lat <= 56) return "bottom";
@@ -1101,21 +1115,114 @@
     return d.x < mapCenter ? "left" : "right";
   }
 
+  function referenceSideOptions(item) {
+    if (currentBoundary !== "canada") return [];
+    const name = labelKeyText(item);
+    const rules = [
+      [/mackenzie|red chris|ksi lisims|north coast|lng canada/, ["left"]],
+      [/grays|arctic/, ["top", "left"]],
+      [/northwest critical|mcilvenna/, ["bottom", "left"]],
+      [/pathways/, ["bottom"]],
+      [/taltson|churchill|iqaluit|alto|wind west|northcliff|contrecoeur/, ["right"]],
+      [/nouveau|darlington|crawford/, ["bottom", "right"]]
+    ];
+    const match = rules.find(([pattern]) => pattern.test(name));
+    return match ? match[1] : [];
+  }
+
+  function labelPriority(row) {
+    return toPriority(row && row.priority);
+  }
+
+  function comparePlacementOrder(a, b, points, settings) {
+    const priority = labelPriority(b) - labelPriority(a);
+    if (priority) return priority;
+    const difficulty = placementDifficulty(b, points, settings) - placementDifficulty(a, points, settings);
+    if (difficulty) return difficulty;
+    return a.y - b.y || a.x - b.x;
+  }
+
   function createProjection(geo, settings) {
     const source = boundarySources[currentBoundary] || boundarySources.canada;
+    const mapExtent = source.projection === "world"
+      ? [[settings.width * 0.06, settings.height * 0.10], [settings.width * 0.94, settings.height * 0.74]]
+      : [[settings.width * 0.09, settings.height * 0.07], [settings.width * 0.91, settings.height * 0.78]];
+    const scaleFactor = settings.mapScale / 100;
+    const scaleCenter = [
+      (mapExtent[0][0] + mapExtent[1][0]) / 2,
+      (mapExtent[0][1] + mapExtent[1][1]) / 2
+    ];
+    const applyMapScale = projection => {
+      if (scaleFactor === 1) return projection;
+      const translate = projection.translate();
+      projection
+        .scale(projection.scale() * scaleFactor)
+        .translate([
+          scaleCenter[0] + scaleFactor * (translate[0] - scaleCenter[0]),
+          scaleCenter[1] + scaleFactor * (translate[1] - scaleCenter[1])
+        ]);
+      return projection;
+    };
+
     if (source.projection === "world") {
-      return d3.geoEqualEarth()
-        .fitExtent([[settings.width * 0.06, settings.height * 0.10], [settings.width * 0.94, settings.height * 0.74]], geo);
+      return applyMapScale(d3.geoEqualEarth().fitExtent(mapExtent, geo));
     }
 
-    return d3.geoConicConformal()
+    return applyMapScale(d3.geoConicConformal()
       .parallels([49, 77])
       .rotate([96, 0])
       .center([0, 61])
-      .fitExtent([[settings.width * 0.09, settings.height * 0.07], [settings.width * 0.91, settings.height * 0.78]], geo);
+      .fitExtent(mapExtent, geo));
   }
 
-  function makeLabelBox(d, side, settings) {
+  function projectRowsForLayout(rows, projection) {
+    const mappedRows = [];
+    const calloutRows = [];
+    const projectedProblems = [];
+    const hiddenRegionProblems = [];
+
+    rows.forEach(row => {
+      const hasCoords = row.lon !== "" && row.lat !== "";
+      if (!hasCoords) {
+        calloutRows.push(row);
+        return;
+      }
+      const hiddenRegion = getHiddenRegionForPoint(Number(row.lon), Number(row.lat));
+      if (hiddenRegion) {
+        hiddenRegionProblems.push(`${row.name || "Unnamed point"} (${hiddenRegion})`);
+        return;
+      }
+      const projected = projection([Number(row.lon), Number(row.lat)]);
+      if (!projected || !Number.isFinite(projected[0]) || !Number.isFinite(projected[1])) {
+        projectedProblems.push(row.name || "Unnamed point");
+        return;
+      }
+      mappedRows.push({ ...row, x: projected[0], y: projected[1] });
+    });
+
+    return { mappedRows, calloutRows, projectedProblems, hiddenRegionProblems };
+  }
+
+  function createMapLayoutContext(visibleGeo, rows, settings) {
+    const projection = createProjection(visibleGeo, settings);
+    const path = d3.geoPath(projection);
+    const mapBoundsArray = path.bounds(visibleGeo);
+    const mapBounds = {
+      x0: mapBoundsArray[0][0],
+      y0: mapBoundsArray[0][1],
+      x1: mapBoundsArray[1][0],
+      y1: mapBoundsArray[1][1]
+    };
+    return {
+      settings,
+      projection,
+      path,
+      mapBounds,
+      ...projectRowsForLayout(rows, projection)
+    };
+  }
+
+  function makeLabelBox(d, side, settings, mapBounds = null) {
     const lines = wrapLabel(d.name, settings.labelMaxChars);
     const lineHeight = settings.labelSize * 1.2;
     const footnote = getRenderableFootnote(d.footnote);
@@ -1129,6 +1236,218 @@
 
   function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
+  }
+
+  function constrainShiftDrag(start, next, dragState, event) {
+    const sourceEvent = event && event.sourceEvent ? event.sourceEvent : null;
+    const axisKey = Object.prototype.hasOwnProperty.call(dragState, "axis") ? "axis" : "dragAxis";
+    if (!sourceEvent || !sourceEvent.shiftKey) {
+      dragState[axisKey] = null;
+      return next;
+    }
+
+    const dx = next.x - start.x;
+    const dy = next.y - start.y;
+    if (!dragState[axisKey] && Math.hypot(dx, dy) > 2) {
+      dragState[axisKey] = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
+    }
+
+    if (dragState[axisKey] === "x") return { x: next.x, y: start.y };
+    if (dragState[axisKey] === "y") return { x: start.x, y: next.y };
+    return next;
+  }
+
+  function clearDistanceMarkers() {
+    d3.select(els.svg.node()).selectAll(".distance-markers").remove();
+  }
+
+  function setPreviewLayerVisibility(selector, visible) {
+    const svgNode = els.svg ? els.svg.node() : null;
+    if (!svgNode) return false;
+    const layer = d3.select(svgNode).selectAll(selector);
+    const hasLayer = Boolean(layer.size());
+    if (hasLayer) layer.style("display", visible ? null : "none");
+    return hasLayer;
+  }
+
+  function setMapFurnitureVisibility(key, visible, visibilityInput, label) {
+    const selector = key === "legend" ? ".legend-layer" : ".callout-layer";
+    if (visibilityInput) visibilityInput.checked = visible;
+    const hasLayer = setPreviewLayerVisibility(selector, visible);
+    if (!visible || hasLayer) {
+      setStatusMessage(`${label} ${visible ? "shown" : "hidden"}.`, "ok");
+      return true;
+    }
+    return false;
+  }
+
+  function rectCenter(rect) {
+    return {
+      x: (rect.x0 + rect.x1) / 2,
+      y: (rect.y0 + rect.y1) / 2
+    };
+  }
+
+  function rectFromPosition(position, dimensions) {
+    return {
+      x0: position.x,
+      y0: position.y,
+      x1: position.x + dimensions.width,
+      y1: position.y + dimensions.height
+    };
+  }
+
+  function inflateRect(rect, pad) {
+    return {
+      x0: rect.x0 - pad,
+      y0: rect.y0 - pad,
+      x1: rect.x1 + pad,
+      y1: rect.y1 + pad
+    };
+  }
+
+  function mapBoundsRect(mapBounds) {
+    return {
+      x0: mapBounds.x0,
+      y0: mapBounds.y0,
+      x1: mapBounds.x1,
+      y1: mapBounds.y1
+    };
+  }
+
+  function drawMeasurementLine(layer, measurement) {
+    if (!measurement || measurement.distance < 1) return;
+    const label = `${Math.round(measurement.distance)} px`;
+    const variant = measurement.variant ? ` ${measurement.variant}` : "";
+    const midX = (measurement.x1 + measurement.x2) / 2;
+    const midY = (measurement.y1 + measurement.y2) / 2;
+    const isHorizontal = Math.abs(measurement.y1 - measurement.y2) < Math.abs(measurement.x1 - measurement.x2);
+    const tickSize = 5;
+
+    layer.append("line")
+      .attr("class", `distance-marker-line${variant}`)
+      .attr("x1", measurement.x1)
+      .attr("y1", measurement.y1)
+      .attr("x2", measurement.x2)
+      .attr("y2", measurement.y2);
+
+    const ticks = isHorizontal
+      ? [
+          { x1: measurement.x1, y1: measurement.y1 - tickSize, x2: measurement.x1, y2: measurement.y1 + tickSize },
+          { x1: measurement.x2, y1: measurement.y2 - tickSize, x2: measurement.x2, y2: measurement.y2 + tickSize }
+        ]
+      : [
+          { x1: measurement.x1 - tickSize, y1: measurement.y1, x2: measurement.x1 + tickSize, y2: measurement.y1 },
+          { x1: measurement.x2 - tickSize, y1: measurement.y2, x2: measurement.x2 + tickSize, y2: measurement.y2 }
+        ];
+
+    ticks.forEach(tick => {
+      layer.append("line")
+        .attr("class", `distance-marker-tick${variant}`)
+        .attr("x1", tick.x1)
+        .attr("y1", tick.y1)
+        .attr("x2", tick.x2)
+        .attr("y2", tick.y2);
+    });
+
+    const badgeWidth = Math.max(42, label.length * 7 + 14);
+    const badgeX = clamp(midX - badgeWidth / 2, 4, measurement.settings.width - badgeWidth - 4);
+    const badgeY = clamp(midY - 10, 4, measurement.settings.height - 22);
+    const badge = layer.append("g")
+      .attr("class", `distance-marker-badge${variant}`)
+      .attr("transform", `translate(${badgeX},${badgeY})`);
+
+    badge.append("rect")
+      .attr("width", badgeWidth)
+      .attr("height", 20);
+
+    badge.append("text")
+      .attr("x", badgeWidth / 2)
+      .attr("y", 14)
+      .text(label);
+  }
+
+  function nearestCanvasMeasurements(subjectRect, settings) {
+    const center = rectCenter(subjectRect);
+    const leftDistance = subjectRect.x0;
+    const rightDistance = settings.width - subjectRect.x1;
+    const topDistance = subjectRect.y0;
+    const bottomDistance = settings.height - subjectRect.y1;
+    const horizontal = leftDistance <= rightDistance
+      ? { x1: 0, y1: center.y, x2: subjectRect.x0, y2: center.y, distance: leftDistance, settings }
+      : { x1: subjectRect.x1, y1: center.y, x2: settings.width, y2: center.y, distance: rightDistance, settings };
+    const vertical = topDistance <= bottomDistance
+      ? { x1: center.x, y1: 0, x2: center.x, y2: subjectRect.y0, distance: topDistance, settings }
+      : { x1: center.x, y1: subjectRect.y1, x2: center.x, y2: settings.height, distance: bottomDistance, settings };
+
+    return [horizontal, vertical];
+  }
+
+  function nearestRectMeasurement(subjectRect, targetRect, settings) {
+    const subjectCenter = rectCenter(subjectRect);
+    const targetCenter = rectCenter(targetRect);
+    const overlapX = Math.min(subjectRect.x1, targetRect.x1) - Math.max(subjectRect.x0, targetRect.x0);
+    const overlapY = Math.min(subjectRect.y1, targetRect.y1) - Math.max(subjectRect.y0, targetRect.y0);
+    const candidates = [];
+
+    if (subjectRect.x0 >= targetRect.x1) {
+      const y = clamp(subjectCenter.y, targetRect.y0, targetRect.y1);
+      candidates.push({ x1: targetRect.x1, y1: y, x2: subjectRect.x0, y2: y, distance: subjectRect.x0 - targetRect.x1, settings });
+    } else if (targetRect.x0 >= subjectRect.x1) {
+      const y = clamp(subjectCenter.y, targetRect.y0, targetRect.y1);
+      candidates.push({ x1: subjectRect.x1, y1: y, x2: targetRect.x0, y2: y, distance: targetRect.x0 - subjectRect.x1, settings });
+    } else if (overlapX > 0) {
+      candidates.push({ x1: subjectCenter.x, y1: subjectRect.y0, x2: subjectCenter.x, y2: targetRect.y0, distance: Math.abs(subjectRect.y0 - targetRect.y0), settings });
+      candidates.push({ x1: subjectCenter.x, y1: subjectRect.y1, x2: subjectCenter.x, y2: targetRect.y1, distance: Math.abs(subjectRect.y1 - targetRect.y1), settings });
+    }
+
+    if (subjectRect.y0 >= targetRect.y1) {
+      const x = clamp(subjectCenter.x, targetRect.x0, targetRect.x1);
+      candidates.push({ x1: x, y1: targetRect.y1, x2: x, y2: subjectRect.y0, distance: subjectRect.y0 - targetRect.y1, settings });
+    } else if (targetRect.y0 >= subjectRect.y1) {
+      const x = clamp(subjectCenter.x, targetRect.x0, targetRect.x1);
+      candidates.push({ x1: x, y1: subjectRect.y1, x2: x, y2: targetRect.y0, distance: targetRect.y0 - subjectRect.y1, settings });
+    } else if (overlapY > 0) {
+      candidates.push({ x1: subjectRect.x0, y1: subjectCenter.y, x2: targetRect.x0, y2: subjectCenter.y, distance: Math.abs(subjectRect.x0 - targetRect.x0), settings });
+      candidates.push({ x1: subjectRect.x1, y1: subjectCenter.y, x2: targetRect.x1, y2: subjectCenter.y, distance: Math.abs(subjectRect.x1 - targetRect.x1), settings });
+    }
+
+    return candidates
+      .filter(candidate => Number.isFinite(candidate.distance) && candidate.distance > 0)
+      .sort((a, b) => a.distance - b.distance)[0] || null;
+  }
+
+  function nearestLabelMeasurement(subjectRect, activeLabelKey, settings) {
+    const placed = lastLayout && Array.isArray(lastLayout.placed) ? lastLayout.placed : [];
+    return placed
+      .filter(label => label.labelKey !== activeLabelKey)
+      .map(label => nearestRectMeasurement(subjectRect, labelVisualBox(label, 8), settings))
+      .filter(Boolean)
+      .sort((a, b) => a.distance - b.distance)[0] || null;
+  }
+
+  function drawDistanceMarkers(svg, settings, subjectRect, options = {}) {
+    if (!settings.showDistanceMarkers) {
+      clearDistanceMarkers();
+      return;
+    }
+    clearDistanceMarkers();
+    const layer = svg.append("g")
+      .attr("class", "distance-markers")
+      .attr("aria-label", "Distance markers");
+
+    nearestCanvasMeasurements(subjectRect, settings)
+      .forEach(measurement => drawMeasurementLine(layer, measurement));
+
+    if (options.mapBounds) {
+      drawMeasurementLine(layer, nearestRectMeasurement(subjectRect, mapBoundsRect(options.mapBounds), settings));
+    }
+
+    if (options.includeNearbyLabels) {
+      drawMeasurementLine(layer, nearestLabelMeasurement(subjectRect, options.activeLabelKey, settings));
+    }
+
+    if (!layer.selectAll("*").size()) layer.remove();
   }
 
   function labelFontSize(label) {
@@ -1200,21 +1519,22 @@
 
     const totalBlockHeight = rowHeights.reduce((sum, height) => sum + height, 0) + Math.max(0, rows.length - 1) * rowGap;
     const minY = Math.max(50, settings.labelSize * 1.2 + 12);
-    const maxY = settings.height - totalBlockHeight - 24;
-    const blockShift = side === "top"
-      ? Math.max(0, minY - (baseY - totalBlockHeight))
-      : Math.max(0, baseY + totalBlockHeight - (settings.height - 24));
+    const canvasBottom = settings.height - 24;
+    const sideGap = Math.max(24, settings.labelSize * 1.5);
 
     const slotsByItem = new Map();
     rows.forEach((row, rowIndex) => {
       row.forEach(slot => {
-        const y = side === "top"
-          ? baseY - rowOffsets[rowIndex] + blockShift
-          : baseY + rowOffsets[rowIndex] - blockShift;
+        const fontSize = labelFontSize(slot.box);
+        const visualHeight = labelVisualHeight(slot.box);
+        const maxTopBaseline = mapBounds.y0 - sideGap - visualHeight + fontSize;
+        const minBottomBaseline = mapBounds.y1 + sideGap + fontSize;
+        const topY = clamp(baseY - rowOffsets[rowIndex], minY, Math.max(minY, maxTopBaseline));
+        const bottomY = clamp(baseY + rowOffsets[rowIndex], Math.min(canvasBottom, minBottomBaseline), canvasBottom);
         slotsByItem.set(slot.item, {
           side,
           x: slot.x,
-          y: clamp(y, minY, Math.max(minY, maxY + rowOffsets[rowIndex])),
+          y: side === "top" ? topY : bottomY,
           box: slot.box
         });
       });
@@ -1227,6 +1547,7 @@
     const labelGap = Math.max(22, settings.labelSize * 1.35);
     const minY = Math.max(58, settings.labelSize * 2);
     const maxY = settings.height - 44;
+    const sideGap = Math.max(24, settings.labelSize * 1.5);
     const slots = items.map((item, index) => {
       const box = boxes[index];
       const centerY = item.y + getDesignerVerticalOffset(item, side, settings);
@@ -1262,8 +1583,16 @@
     const slotsByItem = new Map();
     slots.forEach(slot => {
       const lineOffset = getDesignerLineOffset(slot.item, side, settings);
-      const rightX = clamp(slot.item.x + lineOffset, mapBounds.x0 + 20, settings.width - slot.box.textWidth - 30);
-      const leftX = clamp(slot.item.x - lineOffset, 30 + slot.box.textWidth, mapBounds.x1 - 20);
+      const leftMin = 30 + slot.box.textWidth;
+      const leftMax = mapBounds.x0 - sideGap;
+      const rightMin = mapBounds.x1 + sideGap;
+      const rightMax = settings.width - slot.box.textWidth - 30;
+      const leftX = leftMax >= leftMin
+        ? clamp(slot.item.x - lineOffset, leftMin, leftMax)
+        : leftMin;
+      const rightX = rightMax >= rightMin
+        ? clamp(slot.item.x + lineOffset, rightMin, rightMax)
+        : Math.max(30, rightMax);
       slotsByItem.set(slot.item, {
         side,
         x: side === "left" ? leftX : rightX,
@@ -1287,6 +1616,7 @@
     const name = labelKeyText(item);
     if (side === "left") {
       if (item.lon <= -126) return Math.max(220, unit * 13);
+      if (name.includes("red chris")) return Math.max(215, unit * 12.5);
       if (name.includes("north coast") || name.includes("lng canada")) return Math.max(190, unit * 11);
       return Math.max(170, unit * 10);
     }
@@ -1294,6 +1624,7 @@
     if (side === "right") {
       if (name.includes("iqaluit")) return Math.max(210, unit * 12);
       if (name.includes("churchill") || name.includes("taltson")) return Math.max(310, unit * 18);
+      if (name.includes("northcliff")) return Math.max(190, unit * 11);
       if (item.lon > -76 && item.lat < 48) return Math.max(175, unit * 10);
       return base;
     }
@@ -1308,8 +1639,8 @@
 
     if (side === "top") {
       if (name.includes("mackenzie")) return -unit * 12;
-      if (name.includes("arctic")) return -unit * 10;
-      if (name.includes("grays")) return -unit * 8;
+      if (name.includes("arctic")) return -unit * 18;
+      if (name.includes("grays")) return -unit * 3;
       if (item.lon < -118) return -unit * 8;
       return -unit * 3;
     }
@@ -1317,8 +1648,9 @@
     if (side === "bottom") {
       if (name.includes("crawford")) return -unit * 4;
       if (name.includes("darlington")) return -unit * 1;
-      if (name.includes("pathways")) return -unit * 7;
+      if (name.includes("pathways")) return -unit * 11;
       if (name.includes("mcilvenna")) return -unit * 4;
+      if (name.includes("nouveau")) return unit * 9;
       return unit * 1.5;
     }
 
@@ -1331,8 +1663,8 @@
     const name = labelKeyText(item);
 
     if (side === "left") {
-      if (name.includes("northwest critical")) return -unit * 5;
-      if (name.includes("red chris")) return -unit * 2.2;
+      if (name.includes("northwest critical")) return unit * 7;
+      if (name.includes("red chris")) return -unit * 7;
       if (name.includes("ksi lisims")) return unit * 0.3;
       if (name.includes("north coast")) return unit * 3.4;
       if (name.includes("lng canada")) return unit * 6;
@@ -1361,7 +1693,7 @@
   }
 
   function createSlots(items, side, settings, mapBounds) {
-    const boxes = items.map(d => makeLabelBox(d, side, settings));
+    const boxes = items.map(d => makeLabelBox(d, side, settings, mapBounds));
 
     if (side === "left" || side === "right") {
       return createVerticalSlots(items, boxes, side, settings, mapBounds);
@@ -1370,41 +1702,1147 @@
     return createHorizontalSlots(items, boxes, side, settings, mapBounds);
   }
 
-  function layoutLabels(points, settings, mapBounds) {
-    const grouped = { left: [], right: [], top: [], bottom: [] };
+  function rectArea(rect) {
+    return Math.max(0, rect.x1 - rect.x0) * Math.max(0, rect.y1 - rect.y0);
+  }
 
-    points.forEach(d => {
-      const side = preferredSide(d, settings, mapBounds);
-      grouped[side].push(d);
+  function outsideRectArea(rect, bounds) {
+    return rectArea(rect) - rectOverlapArea(rect, bounds);
+  }
+
+  function subtractInterval(intervals, blockedStart, blockedEnd) {
+    return intervals.flatMap(interval => {
+      const start = Math.max(interval.start, blockedStart);
+      const end = Math.min(interval.end, blockedEnd);
+      if (end <= start) return [interval];
+      const next = [];
+      if (start > interval.start) next.push({ start: interval.start, end: start });
+      if (end < interval.end) next.push({ start: end, end: interval.end });
+      return next;
+    });
+  }
+
+  function createCapacitySide(side, zone, settings, obstacles) {
+    const axis = side === "left" || side === "right" ? "y" : "x";
+    const minSegment = Math.max(24, settings.labelSize * 1.6);
+    let intervals = axis === "y"
+      ? [{ start: zone.y0, end: zone.y1 }]
+      : [{ start: zone.x0, end: zone.x1 }];
+
+    obstacles.forEach(obstacle => {
+      if (!rectsOverlap(zone, obstacle.rect)) return;
+      intervals = axis === "y"
+        ? subtractInterval(intervals, obstacle.rect.y0, obstacle.rect.y1)
+        : subtractInterval(intervals, obstacle.rect.x0, obstacle.rect.x1);
     });
 
-    const placed = [];
-    Object.keys(grouped).forEach(side => {
-      const items = grouped[side].slice();
-      if (side === "left" || side === "right") {
-        items.sort((a, b) => a.y - b.y);
-      } else {
-        items.sort((a, b) => a.x - b.x);
+    return {
+      side,
+      zone,
+      axis,
+      thickness: axis === "y" ? zone.x1 - zone.x0 : zone.y1 - zone.y0,
+      intervals: intervals
+        .map(interval => ({ ...interval, remaining: interval.end - interval.start }))
+        .filter(interval => interval.remaining >= minSegment)
+    };
+  }
+
+  function createPerimeterCapacity(settings, mapBounds, obstacles = []) {
+    const margin = Math.max(24, settings.labelSize * 1.5);
+    const overlapAllowance = Math.max(18, settings.labelSize * 1.4);
+    const x0 = margin;
+    const y0 = margin;
+    const x1 = settings.width - margin;
+    const y1 = settings.height - margin;
+    const mapRect = mapBoundsRect(mapBounds);
+    const zones = {
+      left: {
+        x0,
+        y0,
+        x1: Math.max(x0, mapRect.x0 + overlapAllowance),
+        y1
+      },
+      right: {
+        x0: Math.min(x1, mapRect.x1 - overlapAllowance),
+        y0,
+        x1,
+        y1
+      },
+      top: {
+        x0,
+        y0,
+        x1,
+        y1: Math.max(y0, mapRect.y0 + overlapAllowance)
+      },
+      bottom: {
+        x0,
+        y0: Math.min(y1, mapRect.y1 - overlapAllowance),
+        x1,
+        y1
       }
-      const slots = createSlots(items, side, settings, mapBounds);
-      items.forEach((item, i) => {
-        const slot = slots[i];
-        placed.push({
-          ...item,
-          labelSide: side,
-          labelX: slot.x,
-          labelY: slot.y,
-          lines: slot.box.lines,
-          lineHeight: slot.box.lineHeight,
-          textWidth: slot.box.textWidth,
-          textHeight: slot.box.textHeight,
-          footnote: slot.box.footnote,
-          anchor: side === "left" ? "end" : "start"
+    };
+
+    return Object.fromEntries(Object.entries(zones).map(([side, zone]) => [
+      side,
+      createCapacitySide(side, zone, settings, obstacles)
+    ]));
+  }
+
+  function cloneCapacity(capacity) {
+    return Object.fromEntries(Object.entries(capacity).map(([side, state]) => [
+      side,
+      {
+        ...state,
+        zone: { ...state.zone },
+        intervals: state.intervals.map(interval => ({ ...interval }))
+      }
+    ]));
+  }
+
+  function labelCapacityDemand(label, side, settings, mapBounds) {
+    const box = makeLabelBox(label, side, settings, mapBounds);
+    const gap = Math.max(8, settings.labelSize * 0.65);
+    return {
+      side,
+      box,
+      length: side === "left" || side === "right"
+        ? labelVisualHeight(box) + gap
+        : box.textWidth + gap,
+      thickness: side === "left" || side === "right"
+        ? box.textWidth
+        : labelVisualHeight(box)
+    };
+  }
+
+  function tryReserveCapacity(sideState, demand) {
+    if (!sideState || sideState.thickness < demand.thickness * 0.72) return false;
+    const interval = sideState.intervals
+      .filter(item => item.remaining >= demand.length)
+      .sort((a, b) => a.remaining - b.remaining)[0];
+    if (!interval) return false;
+    interval.remaining -= demand.length;
+    return true;
+  }
+
+  function assessPerimeterFeasibility(labelRows, settings, mapBounds, obstacles = []) {
+    if (!labelRows.length) {
+      return { feasible: true, placed: 0, total: 0, capacity: createPerimeterCapacity(settings, mapBounds, obstacles), unmet: [] };
+    }
+
+    const capacity = cloneCapacity(createPerimeterCapacity(settings, mapBounds, obstacles));
+    const ordered = labelRows.slice().sort((a, b) => {
+      const aBox = makeLabelBox(a, preferredSide(a, settings, mapBounds), settings, mapBounds);
+      const bBox = makeLabelBox(b, preferredSide(b, settings, mapBounds), settings, mapBounds);
+      return Math.max(bBox.textWidth, labelVisualHeight(bBox)) - Math.max(aBox.textWidth, labelVisualHeight(aBox));
+    });
+    const unmet = [];
+
+    ordered.forEach(label => {
+      const preferred = preferredSide(label, settings, mapBounds);
+      const sides = compatibleSideOrder(preferred);
+      const placed = sides.some(side => tryReserveCapacity(capacity[side], labelCapacityDemand(label, side, settings, mapBounds)));
+      if (!placed) unmet.push(label);
+    });
+
+    return {
+      feasible: unmet.length === 0,
+      placed: labelRows.length - unmet.length,
+      total: labelRows.length,
+      capacity,
+      unmet
+    };
+  }
+
+  function chooseFeasibleMapLayoutContext(visibleGeo, rows, baseSettings) {
+    const startScale = normalizeMapScale(baseSettings.mapScale);
+    const minScale = Math.min(startScale, 65);
+    const step = 5;
+    let fallback = null;
+
+    for (let scale = startScale; scale >= minScale; scale -= step) {
+      const settings = { ...baseSettings, mapScale: scale };
+      const context = createMapLayoutContext(visibleGeo, rows, settings);
+      const labelRows = context.mappedRows.filter(row => row.name);
+      settings.layoutObstacles = getLayoutBoxObstacles(settings, context.calloutRows);
+      const feasibility = assessPerimeterFeasibility(labelRows, settings, context.mapBounds, settings.layoutObstacles);
+      const placementQuality = feasibility.feasible
+        ? measurePlacementQuality(layoutLabels(labelRows, settings, context.mapBounds), settings)
+        : null;
+      const candidate = { ...context, settings, feasibility, placementQuality, requestedMapScale: startScale };
+      if (isBetterScaleFallback(candidate, fallback)) fallback = candidate;
+      if (feasibility.feasible && placementQualityAcceptable(placementQuality)) {
+        return candidate;
+      }
+    }
+
+    return fallback || createMapLayoutContext(visibleGeo, rows, baseSettings);
+  }
+
+  function candidateSideOrder(preferred) {
+    return compatibleSideOrder(preferred).concat(oppositeSide(preferred));
+  }
+
+  function oppositeSide(side) {
+    if (side === "left") return "right";
+    if (side === "right") return "left";
+    if (side === "top") return "bottom";
+    return "top";
+  }
+
+  function compatibleSideOrder(preferred) {
+    const adjacent = {
+      left: ["top", "bottom"],
+      right: ["top", "bottom"],
+      top: ["left", "right"],
+      bottom: ["left", "right"]
+    };
+    return [preferred].concat(adjacent[preferred] || ["left", "right"]);
+  }
+
+  function makeLabelPlacement(item, candidate) {
+    return {
+      ...item,
+      labelSide: candidate.side,
+      labelX: candidate.x,
+      labelY: candidate.y,
+      lines: candidate.box.lines,
+      lineHeight: candidate.box.lineHeight,
+      textWidth: candidate.box.textWidth,
+      textHeight: candidate.box.textHeight,
+      footnote: candidate.box.footnote,
+      anchor: candidate.side === "left" ? "end" : "start"
+    };
+  }
+
+  function createCandidateForSide(item, side, box, settings, distance, offset, mapBounds) {
+    const margin = Math.max(22, settings.labelSize * 1.4);
+    const minX = margin;
+    const maxX = Math.max(minX, settings.width - box.textWidth - margin);
+    const minY = margin + labelFontSize(box);
+    const maxY = settings.height - margin;
+    const sideGap = Math.max(24, settings.labelSize * 1.5);
+    const mapRect = mapBoundsRect(mapBounds);
+
+    if (side === "left") {
+      const labelRightMin = margin + box.textWidth;
+      const labelRightMax = settings.width - margin;
+      const preferredMax = mapRect.x0 - sideGap;
+      const x = preferredMax >= labelRightMin
+        ? clamp(item.x - distance, labelRightMin, preferredMax)
+        : clamp(item.x - distance, labelRightMin, labelRightMax);
+      const y = clampLabelBaseline(labelBaselineForCenter(item.y + offset, box), box, minY, maxY);
+      return { side, x, y, box };
+    }
+
+    if (side === "right") {
+      const preferredMin = mapRect.x1 + sideGap;
+      const x = preferredMin <= maxX
+        ? clamp(item.x + distance, preferredMin, maxX)
+        : clamp(item.x + distance, minX, maxX);
+      const y = clampLabelBaseline(labelBaselineForCenter(item.y + offset, box), box, minY, maxY);
+      return { side, x, y, box };
+    }
+
+    const x = clamp(item.x - box.textWidth / 2 + offset, minX, maxX);
+    if (side === "top") {
+      const outsideBottom = mapRect.y0 - sideGap;
+      const desiredBottom = Math.min(item.y - distance, outsideBottom);
+      const y = clamp(desiredBottom - labelVisualHeight(box) + labelFontSize(box), minY, maxY - labelVisualHeight(box) + labelFontSize(box));
+      return { side, x, y, box };
+    }
+
+    const outsideTop = mapRect.y1 + sideGap;
+    const desiredTop = Math.max(item.y + distance, outsideTop);
+    const y = clamp(desiredTop + labelFontSize(box), minY, maxY - labelVisualHeight(box) + labelFontSize(box));
+    return { side, x, y, box };
+  }
+
+  function createLabelCandidates(item, settings, mapBounds, perimeterCandidates = []) {
+    const preferred = preferredSide(item, settings, mapBounds);
+    const distanceFactors = [0.7, 1, 1.35, 1.75, 2.2];
+    const offsetSteps = [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5];
+    const candidates = [];
+    const seen = new Set();
+    const addCandidate = candidate => {
+      if (!candidate) return;
+      const key = `${candidate.side}:${Math.round(candidate.x)}:${Math.round(candidate.y)}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      candidates.push(candidate);
+    };
+
+    perimeterCandidates.forEach(addCandidate);
+
+    candidateSideOrder(preferred).forEach(side => {
+      const box = makeLabelBox(item, side, settings, mapBounds);
+      const baseDistance = getDesignerLineOffset(item, side, settings);
+      const baseOffset = side === "left" || side === "right"
+        ? getDesignerVerticalOffset(item, side, settings)
+        : getDesignerHorizontalOffset(item, side, settings);
+      const offsetUnit = side === "left" || side === "right"
+        ? Math.max(26, settings.labelSize * 1.8)
+        : Math.max(34, settings.labelSize * 2.2);
+
+      distanceFactors.forEach(distanceFactor => {
+        offsetSteps.forEach(step => {
+          const candidate = createCandidateForSide(
+            item,
+            side,
+            box,
+            settings,
+            Math.max(34, baseDistance * distanceFactor),
+            baseOffset + step * offsetUnit,
+            mapBounds
+          );
+          addCandidate(candidate);
         });
       });
     });
 
-    return applyManualLabelPositions(placed);
+    return candidates;
+  }
+
+  function createPerimeterCandidateMap(points, settings, mapBounds) {
+    const byKey = new Map(points.map(point => [getLabelKey(point), []]));
+    ["left", "right", "top", "bottom"].forEach(side => {
+      const sideItems = points.slice().sort((a, b) => {
+        if (side === "left" || side === "right") return a.y - b.y || a.x - b.x;
+        return a.x - b.x || a.y - b.y;
+      });
+      const boxes = sideItems.map(item => makeLabelBox(item, side, settings, mapBounds));
+      createSlots(sideItems, side, settings, mapBounds).forEach((slot, index) => {
+        if (!slot) return;
+        const item = sideItems[index];
+        const key = getLabelKey(item);
+        const list = byKey.get(key);
+        if (!list) return;
+        list.push({
+          side,
+          x: slot.x,
+          y: slot.y,
+          box: boxes[index]
+        });
+      });
+    });
+    return byKey;
+  }
+
+  const labelPlacementWeights = {
+    labelOverlapBase: 24000,
+    labelOverlapArea: 44,
+    mapOverlapBase: 12000,
+    mapOverlapArea: 22,
+    outsideCanvasArea: 1600,
+    leaderLineLength: 3.5,
+    leaderLineSoftMaxRatio: 0.2,
+    leaderLineSoftMaxMin: 155,
+    leaderLineExcessArea: 1.2,
+    sideChange: 110,
+    leaderLineCrossing: 42000,
+    boxObstacleBase: 36000,
+    boxObstacleArea: 95,
+    leaderBoxCrossing: 9500,
+    markerOverlapBase: 9000,
+    markerOverlapArea: 90,
+    leaderMarkerCrossing: 2600,
+    sameSideCrowding: 90,
+    leaderDirection: 900,
+    verticalOrderInversion: 18000,
+    offMapBonus: 4200,
+    outsideMapBoundsBonus: 900,
+    nearMapCenterPenalty: 1200,
+    adjacentSideChange: 90000,
+    oppositeSideChange: 160000,
+    radialSideMismatch: 38000
+  };
+
+  function markerObstacleRect(point, settings) {
+    const category = getCategory(point.type);
+    const markerSize = getCategoryMarkerSize(category, settings);
+    const pad = Math.max(5, markerSize * 0.75);
+    const radius = markerSize / 2 + pad;
+    return {
+      x0: point.x - radius,
+      y0: point.y - radius,
+      x1: point.x + radius,
+      y1: point.y + radius
+    };
+  }
+
+  function lineSegmentForLabel(label) {
+    return {
+      start: { x: label.x, y: label.y },
+      end: lineEnd(label)
+    };
+  }
+
+  function countCandidateCrossings(candidateLabel, placed) {
+    if (candidateLabel.hideLine) return 0;
+    const candidateLine = lineSegmentForLabel(candidateLabel);
+    return placed.filter(label => {
+      if (label.hideLine) return false;
+      const line = lineSegmentForLabel(label);
+      return segmentsCross(candidateLine.start, candidateLine.end, line.start, line.end);
+    }).length;
+  }
+
+  function pointInRect(point, rect) {
+    return point.x >= rect.x0 && point.x <= rect.x1 && point.y >= rect.y0 && point.y <= rect.y1;
+  }
+
+  function segmentIntersectsRect(start, end, rect) {
+    if (pointInRect(start, rect) || pointInRect(end, rect)) return true;
+    const corners = [
+      { x: rect.x0, y: rect.y0 },
+      { x: rect.x1, y: rect.y0 },
+      { x: rect.x1, y: rect.y1 },
+      { x: rect.x0, y: rect.y1 }
+    ];
+    return corners.some((corner, index) => {
+      const next = corners[(index + 1) % corners.length];
+      return segmentsCross(start, end, corner, next);
+    });
+  }
+
+  function countMarkerLineCrossings(candidateLabel, points, settings) {
+    if (candidateLabel.hideLine) return 0;
+    const candidateLine = lineSegmentForLabel(candidateLabel);
+    return points.filter(point => {
+      if (point.rowId === candidateLabel.rowId) return false;
+      return segmentIntersectsRect(candidateLine.start, candidateLine.end, markerObstacleRect(point, settings));
+    }).length;
+  }
+
+  function leaderDirectionPenalty(label) {
+    if (label.hideLine) return 0;
+    const end = lineEnd(label);
+    const dx = end.x - label.x;
+    const dy = end.y - label.y;
+    if (label.labelSide === "left" && dx > 0) return labelPlacementWeights.leaderDirection;
+    if (label.labelSide === "right" && dx < 0) return labelPlacementWeights.leaderDirection;
+    if (label.labelSide === "top" && dy > 0) return labelPlacementWeights.leaderDirection;
+    if (label.labelSide === "bottom" && dy < 0) return labelPlacementWeights.leaderDirection;
+    return 0;
+  }
+
+  function leaderLengthPenalty(label, settings) {
+    if (label.hideLine) return 0;
+    const end = lineEnd(label);
+    const length = Math.hypot(label.x - end.x, label.y - end.y);
+    const softMax = Math.max(
+      labelPlacementWeights.leaderLineSoftMaxMin,
+      settings.width * labelPlacementWeights.leaderLineSoftMaxRatio
+    );
+    if (length <= softMax) return 0;
+    const excess = length - softMax;
+    return excess * excess * labelPlacementWeights.leaderLineExcessArea;
+  }
+
+  function markerObstaclePenalty(label, points, settings) {
+    const rect = labelRect(label);
+    return points.reduce((score, point) => {
+      if (point.rowId === label.rowId) return score;
+      const overlap = rectOverlapArea(rect, markerObstacleRect(point, settings));
+      if (!overlap) return score;
+      return score + labelPlacementWeights.markerOverlapBase + overlap * labelPlacementWeights.markerOverlapArea;
+    }, 0);
+  }
+
+  function layoutBoxObstaclePenalty(label, settings) {
+    const obstacles = Array.isArray(settings.layoutObstacles) ? settings.layoutObstacles : [];
+    if (!obstacles.length) return 0;
+    const rect = labelRect(label);
+    const line = lineSegmentForLabel(label);
+
+    return obstacles.reduce((score, obstacle) => {
+      const overlap = rectOverlapArea(rect, obstacle.rect);
+      const overlapPenalty = overlap
+        ? labelPlacementWeights.boxObstacleBase + overlap * labelPlacementWeights.boxObstacleArea
+        : 0;
+      const linePenalty = !label.hideLine && segmentIntersectsRect(line.start, line.end, obstacle.rect)
+        ? labelPlacementWeights.leaderBoxCrossing
+        : 0;
+      return score + overlapPenalty + linePenalty;
+    }, 0);
+  }
+
+  function sideCrowdingPenalty(candidateLabel, placed, settings) {
+    const candidateRect = labelBackgroundRect(candidateLabel);
+    const minGap = Math.max(10, settings.labelSize * 0.8);
+    return placed.reduce((score, label) => {
+      if (label.labelSide !== candidateLabel.labelSide) return score;
+      const rect = labelBackgroundRect(label);
+      const verticalSide = label.labelSide === "left" || label.labelSide === "right";
+      const candidateCenter = verticalSide ? candidateRect.centerY : candidateRect.centerX;
+      const labelCenter = verticalSide ? rect.centerY : rect.centerX;
+      const candidateSpan = verticalSide
+        ? candidateRect.y1 - candidateRect.y0
+        : candidateRect.x1 - candidateRect.x0;
+      const labelSpan = verticalSide
+        ? rect.y1 - rect.y0
+        : rect.x1 - rect.x0;
+      const distance = Math.abs(labelCenter - candidateCenter);
+      const target = (candidateSpan + labelSpan) / 2 + minGap;
+      return distance < target ? score + (target - distance) * labelPlacementWeights.sameSideCrowding : score;
+    }, 0);
+  }
+
+  function verticalOrderPenalty(candidateLabel, placed) {
+    return placed.reduce((score, label) => {
+      if (label.labelSide !== candidateLabel.labelSide) return score;
+      if (label.labelSide !== "left" && label.labelSide !== "right") return score;
+      const anchorOrder = Math.sign(candidateLabel.y - label.y);
+      const labelOrder = Math.sign(candidateLabel.labelY - label.labelY);
+      return anchorOrder && labelOrder && anchorOrder !== labelOrder
+        ? score + labelPlacementWeights.verticalOrderInversion
+        : score;
+    }, 0);
+  }
+
+  function sideCompatibilityPenalty(candidateLabel, preferredSideValue, mapBounds) {
+    const name = labelKeyText(candidateLabel);
+    if (candidateLabel.labelSide === preferredSideValue) return 0;
+    let score = candidateLabel.labelSide === oppositeSide(preferredSideValue)
+      ? labelPlacementWeights.oppositeSideChange
+      : labelPlacementWeights.adjacentSideChange;
+    if (currentBoundary === "canada" && name.includes("pathways") && candidateLabel.labelSide === "right") {
+      score += labelPlacementWeights.oppositeSideChange;
+    }
+    if (currentBoundary === "canada" && name.includes("pathways") && candidateLabel.labelSide === "left") {
+      score += labelPlacementWeights.adjacentSideChange;
+    }
+    if (currentBoundary === "canada" && name.includes("mcilvenna") && candidateLabel.labelSide === "right") {
+      score += labelPlacementWeights.oppositeSideChange;
+    }
+    if (currentBoundary === "canada" && name.includes("north coast") && candidateLabel.labelSide !== "left") {
+      score += labelPlacementWeights.adjacentSideChange;
+    }
+    if (currentBoundary === "canada" && name.includes("iqaluit") && candidateLabel.labelSide !== "right") {
+      score += labelPlacementWeights.oppositeSideChange;
+    }
+    if (currentBoundary === "canada" && name.includes("alto") && candidateLabel.labelSide !== "right") {
+      score += labelPlacementWeights.oppositeSideChange;
+    }
+    if (currentBoundary === "canada" && name.includes("northwest critical") && candidateLabel.labelSide !== "left" && candidateLabel.labelSide !== "bottom") {
+      score += labelPlacementWeights.oppositeSideChange;
+    }
+    const mapCenterX = (mapBounds.x0 + mapBounds.x1) / 2;
+    const mapCenterY = (mapBounds.y0 + mapBounds.y1) / 2;
+    if (candidateLabel.labelSide === "left" && candidateLabel.x > mapCenterX) score += labelPlacementWeights.radialSideMismatch;
+    if (candidateLabel.labelSide === "right" && candidateLabel.x < mapCenterX) score += labelPlacementWeights.radialSideMismatch;
+    if (candidateLabel.labelSide === "top" && candidateLabel.y > mapCenterY) score += labelPlacementWeights.radialSideMismatch;
+    if (candidateLabel.labelSide === "bottom" && candidateLabel.y < mapCenterY) score += labelPlacementWeights.radialSideMismatch;
+    return score;
+  }
+
+  function scoreCandidate(candidateLabel, placed, settings, mapBounds, preferredSideValue, points = placed) {
+    const rect = labelRect(candidateLabel);
+    const canvasRect = { x0: 0, y0: 0, x1: settings.width, y1: settings.height };
+    const mapRect = mapBoundsRect(mapBounds);
+    const lineEndPoint = lineEnd(candidateLabel);
+    const lineLength = Math.hypot(candidateLabel.x - lineEndPoint.x, candidateLabel.y - lineEndPoint.y);
+    const mapOverlap = rectOverlapArea(rect, mapRect);
+    const outsideCanvas = outsideRectArea(rect, canvasRect);
+    const sidePenalty = sideCompatibilityPenalty(candidateLabel, preferredSideValue, mapBounds);
+    const crossingPenalty = countCandidateCrossings(candidateLabel, placed) * labelPlacementWeights.leaderLineCrossing;
+    const reducedMapPenaltyFactor = settings.mapScale < 90
+      ? 1 + (90 - settings.mapScale) / 20
+      : 1;
+    const mapOverlapPenalty = mapOverlap
+      ? (labelPlacementWeights.mapOverlapBase + mapOverlap * labelPlacementWeights.mapOverlapArea) * reducedMapPenaltyFactor
+      : -labelPlacementWeights.offMapBonus;
+    let score = sidePenalty
+      + crossingPenalty
+      + lineLength * labelPlacementWeights.leaderLineLength
+      + leaderLengthPenalty(candidateLabel, settings)
+      + mapOverlapPenalty
+      + outsideCanvas * labelPlacementWeights.outsideCanvasArea
+      + layoutBoxObstaclePenalty(candidateLabel, settings)
+      + markerObstaclePenalty(candidateLabel, points, settings)
+      + countMarkerLineCrossings(candidateLabel, points, settings) * labelPlacementWeights.leaderMarkerCrossing
+      + sideCrowdingPenalty(candidateLabel, placed, settings)
+      + verticalOrderPenalty(candidateLabel, placed)
+      + leaderDirectionPenalty(candidateLabel);
+
+    placed.forEach(label => {
+      const overlap = rectOverlapArea(rect, labelRect(label));
+      if (overlap) {
+        score += labelPlacementWeights.labelOverlapBase + overlap * labelPlacementWeights.labelOverlapArea;
+      }
+    });
+
+    if (rect.centerY < mapRect.y0 || rect.centerY > mapRect.y1) score -= labelPlacementWeights.outsideMapBoundsBonus;
+    if (rect.centerX < mapRect.x0 || rect.centerX > mapRect.x1) score -= labelPlacementWeights.outsideMapBoundsBonus;
+    if (rect.centerX > mapRect.x0 && rect.centerX < mapRect.x1 && rect.centerY > mapRect.y0 && rect.centerY < mapRect.y1) {
+      score += labelPlacementWeights.nearMapCenterPenalty;
+    }
+    if (currentBoundary === "canada" && labelKeyText(candidateLabel).includes("northwest critical") && candidateLabel.labelSide === "left") {
+      const targetY = mapRect.y1 + Math.max(18, settings.labelSize * 1.2);
+      if (rect.centerY < targetY) score += (targetY - rect.centerY) * 1500;
+    }
+    if (currentBoundary === "canada" && labelKeyText(candidateLabel).includes("pathways") && candidateLabel.labelSide === "bottom") {
+      const targetX = mapRect.x0 + Math.max(35, settings.labelSize * 3);
+      if (rect.x0 < targetX) score += (targetX - rect.x0) * 1200;
+    }
+
+    return score;
+  }
+
+  function chooseBestCandidate(item, placed, settings, mapBounds, points = placed, perimeterCandidateMap = new Map()) {
+    const preferred = preferredSide(item, settings, mapBounds);
+    const candidates = createLabelCandidates(item, settings, mapBounds, perimeterCandidateMap.get(getLabelKey(item)));
+    return candidates
+      .map(candidate => {
+        const label = makeLabelPlacement(item, candidate);
+        return { label, score: scoreCandidate(label, placed, settings, mapBounds, preferred, points) };
+      })
+      .sort((a, b) => a.score - b.score)[0].label;
+  }
+
+  function candidateLabelsForItem(item, placed, settings, mapBounds, points, perimeterCandidateMap = new Map()) {
+    const preferred = preferredSide(item, settings, mapBounds);
+    return createLabelCandidates(item, settings, mapBounds, perimeterCandidateMap.get(getLabelKey(item)))
+      .map(candidate => {
+        const label = makeLabelPlacement(item, candidate);
+        return {
+          label,
+          localScore: scoreCandidate(label, placed, settings, mapBounds, preferred, points)
+        };
+      })
+      .sort((a, b) => a.localScore - b.localScore)
+      .map(candidate => candidate.label);
+  }
+
+  function placementDifficulty(item, points, settings) {
+    const radius = Math.max(46, settings.labelSize * 3.4);
+    return points.reduce((count, other) => {
+      if (other === item) return count;
+      return Math.hypot(item.x - other.x, item.y - other.y) <= radius ? count + 1 : count;
+    }, 0);
+  }
+
+  function layoutOptimizationNeeded(points, settings) {
+    if (points.length >= 12) return true;
+    if (Array.isArray(settings.layoutObstacles) && settings.layoutObstacles.length && points.length >= 6) return true;
+    return points.some(point => placementDifficulty(point, points, settings) >= 3);
+  }
+
+  function makeSeededRandom(seed) {
+    let state = Math.floor(seed) % 2147483647;
+    if (state <= 0) state += 2147483646;
+    return () => {
+      state = state * 16807 % 2147483647;
+      return (state - 1) / 2147483646;
+    };
+  }
+
+  function layoutSeed(points, settings) {
+    return points.reduce((seed, point) => {
+      const x = Math.round(point.x * 10);
+      const y = Math.round(point.y * 10);
+      return (seed + x * 31 + y * 17 + String(point.name || "").length * 13) % 2147483647;
+    }, Math.round(settings.width * 7 + settings.height * 11 + settings.mapScale * 19));
+  }
+
+  function scoreLayout(placed, settings, mapBounds, points) {
+    return placed.reduce((score, label, index) => {
+      const others = placed.filter((_, otherIndex) => otherIndex !== index);
+      return score + scoreCandidate(label, others, settings, mapBounds, preferredSide(label, settings, mapBounds), points);
+    }, 0);
+  }
+
+  function compactPathPoints(points) {
+    return points.filter((point, index) => {
+      if (index === 0) return true;
+      const previous = points[index - 1];
+      return Math.hypot(point.x - previous.x, point.y - previous.y) > 0.5;
+    });
+  }
+
+  function shouldRouteDenseLeader(label, settings) {
+    if (!settings.routeDenseLeaders || label.hideLine) return false;
+    const end = lineEnd(label);
+    const straightLength = Math.hypot(label.x - end.x, label.y - end.y);
+    const longLeader = straightLength > Math.max(210, settings.width * 0.32);
+    const southeastCluster = label.x > settings.width * 0.52
+      && label.y > settings.height * 0.45
+      && (label.labelSide === "right" || label.labelSide === "bottom");
+    return longLeader || southeastCluster;
+  }
+
+  function leaderPathPoints(label, settings) {
+    const end = lineEnd(label);
+    const start = { x: label.x, y: label.y };
+    if (!shouldRouteDenseLeader(label, settings)) return [start, end];
+
+    if (label.labelSide === "left" || label.labelSide === "right") {
+      const bendX = end.x;
+      const bendY = start.y;
+      return compactPathPoints([start, { x: bendX, y: bendY }, end]);
+    }
+
+    const bendX = start.x;
+    const bendY = end.y;
+    return compactPathPoints([start, { x: bendX, y: bendY }, end]);
+  }
+
+  function leaderSegmentsForLabel(label, settings) {
+    const points = leaderPathPoints(label, settings);
+    const segments = [];
+    for (let index = 1; index < points.length; index += 1) {
+      segments.push({ start: points[index - 1], end: points[index] });
+    }
+    return segments;
+  }
+
+  function leaderPathLength(label, settings) {
+    return leaderSegmentsForLabel(label, settings).reduce((total, segment) => {
+      return total + Math.hypot(segment.start.x - segment.end.x, segment.start.y - segment.end.y);
+    }, 0);
+  }
+
+  function maxAllowedLeaderLength(settings) {
+    return Math.max(360, settings.width * 0.38);
+  }
+
+  function measurePlacementQuality(placed, settings) {
+    const lines = placed
+      .filter(label => !label.hideLine)
+      .map(label => ({ segments: leaderSegmentsForLabel(label, settings), length: leaderPathLength(label, settings), label }));
+    const rects = placed.map(labelBackgroundRect);
+    const obstacles = Array.isArray(settings.layoutObstacles) ? settings.layoutObstacles : [];
+    let leaderCrossings = 0;
+    let labelOverlaps = 0;
+    let furnitureOverlaps = 0;
+    let sideRuleViolations = 0;
+    let leaderLengthTotal = 0;
+    let maxLeaderLength = 0;
+    const sideRuleViolationNames = [];
+    const leaderLengthLimit = maxAllowedLeaderLength(settings);
+
+    for (let i = 0; i < lines.length; i += 1) {
+      leaderLengthTotal += lines[i].length;
+      maxLeaderLength = Math.max(maxLeaderLength, lines[i].length);
+
+      for (let j = i + 1; j < lines.length; j += 1) {
+        const crosses = lines[i].segments.some(a => lines[j].segments.some(b => segmentsCross(a.start, a.end, b.start, b.end)));
+        if (crosses) leaderCrossings += 1;
+      }
+    }
+
+    for (let i = 0; i < rects.length; i += 1) {
+      const expectedSides = referenceSideOptions(placed[i]);
+      if (expectedSides.length && !expectedSides.includes(placed[i].labelSide)) {
+        sideRuleViolations += 1;
+        sideRuleViolationNames.push(placed[i].name || `label ${i + 1}`);
+      }
+      for (let j = i + 1; j < rects.length; j += 1) {
+        if (rectsOverlap(rects[i], rects[j])) labelOverlaps += 1;
+      }
+      obstacles.forEach(obstacle => {
+        if (rectsOverlap(rects[i], obstacle.rect)) furnitureOverlaps += 1;
+      });
+    }
+
+    const hardProblems = leaderCrossings + labelOverlaps + furnitureOverlaps;
+    return {
+      leaderCrossings,
+      labelOverlaps,
+      furnitureOverlaps,
+      hardProblems,
+      sideRuleViolations,
+      sideRuleViolationNames,
+      leaderLengthLimit,
+      excessLeaderLength: Math.max(0, maxLeaderLength - leaderLengthLimit),
+      maxLeaderLength,
+      averageLeaderLength: lines.length ? leaderLengthTotal / lines.length : 0
+    };
+  }
+
+  function placementQualityAcceptable(quality) {
+    return !quality || (quality.hardProblems === 0 && quality.sideRuleViolations === 0 && quality.excessLeaderLength <= 0);
+  }
+
+  function isBetterScaleFallback(candidate, fallback) {
+    if (!candidate) return false;
+    if (!fallback) return true;
+    if (candidate.feasibility.placed !== fallback.feasibility.placed) {
+      return candidate.feasibility.placed > fallback.feasibility.placed;
+    }
+    const candidateProblems = candidate.placementQuality ? candidate.placementQuality.hardProblems : Number.MAX_SAFE_INTEGER;
+    const fallbackProblems = fallback.placementQuality ? fallback.placementQuality.hardProblems : Number.MAX_SAFE_INTEGER;
+    if (candidateProblems !== fallbackProblems) return candidateProblems < fallbackProblems;
+    const candidateSideViolations = candidate.placementQuality ? candidate.placementQuality.sideRuleViolations : Number.MAX_SAFE_INTEGER;
+    const fallbackSideViolations = fallback.placementQuality ? fallback.placementQuality.sideRuleViolations : Number.MAX_SAFE_INTEGER;
+    if (candidateSideViolations !== fallbackSideViolations) return candidateSideViolations < fallbackSideViolations;
+    const candidateLeaderExcess = candidate.placementQuality ? candidate.placementQuality.excessLeaderLength : Number.MAX_SAFE_INTEGER;
+    const fallbackLeaderExcess = fallback.placementQuality ? fallback.placementQuality.excessLeaderLength : Number.MAX_SAFE_INTEGER;
+    if (Math.round(candidateLeaderExcess) !== Math.round(fallbackLeaderExcess)) {
+      return candidateLeaderExcess < fallbackLeaderExcess;
+    }
+    const candidateMaxLeader = candidate.placementQuality ? candidate.placementQuality.maxLeaderLength : Number.MAX_SAFE_INTEGER;
+    const fallbackMaxLeader = fallback.placementQuality ? fallback.placementQuality.maxLeaderLength : Number.MAX_SAFE_INTEGER;
+    if (Math.round(candidateMaxLeader) !== Math.round(fallbackMaxLeader)) return candidateMaxLeader < fallbackMaxLeader;
+    return candidate.settings.mapScale > fallback.settings.mapScale;
+  }
+
+  function countSideOrderInversions(placed) {
+    return ["left", "right", "top", "bottom"].reduce((total, side) => {
+      const labels = placed.filter(label => label.labelSide === side);
+      let inversions = 0;
+
+      for (let i = 0; i < labels.length; i += 1) {
+        for (let j = i + 1; j < labels.length; j += 1) {
+          const anchorOrder = side === "left" || side === "right"
+            ? Math.sign(labels[i].y - labels[j].y)
+            : Math.sign(labels[i].x - labels[j].x);
+          const labelOrder = side === "left" || side === "right"
+            ? Math.sign(labels[i].labelY - labels[j].labelY)
+            : Math.sign(lineEnd(labels[i]).x - lineEnd(labels[j]).x);
+          if (anchorOrder && labelOrder && anchorOrder !== labelOrder) inversions += 1;
+        }
+      }
+
+      return total + inversions;
+    }, 0);
+  }
+
+  function createOrderPreservingVerticalSlots(items, side, settings, mapBounds) {
+    const topLimit = Math.max(34, settings.labelSize * 2.4);
+    const bottomLimit = settings.height - Math.max(34, settings.labelSize * 2.2);
+    const sideGap = Math.max(24, settings.labelSize * 1.5);
+    const defaultGap = Math.max(18, settings.labelSize * 1.2);
+    const ordered = items.slice().sort((a, b) => a.y - b.y || a.x - b.x);
+    const slots = ordered.map(item => {
+      const box = makeLabelBox(item, side, settings, mapBounds);
+      const visualHeight = labelVisualHeight(box);
+      const desiredCenter = item.y + getDesignerVerticalOffset(item, side, settings);
+      return {
+        item,
+        box,
+        height: visualHeight,
+        desiredTop: desiredCenter - visualHeight / 2,
+        top: desiredCenter - visualHeight / 2
+      };
+    });
+    const totalHeight = slots.reduce((sum, slot) => sum + slot.height, 0);
+    const availableHeight = Math.max(1, bottomLimit - topLimit);
+    const gap = slots.length > 1
+      ? Math.max(4, Math.min(defaultGap, (availableHeight - totalHeight) / (slots.length - 1)))
+      : 0;
+
+    slots.forEach(slot => {
+      slot.top = clamp(slot.desiredTop, topLimit, bottomLimit - slot.height);
+    });
+
+    for (let i = 1; i < slots.length; i += 1) {
+      const previous = slots[i - 1];
+      const current = slots[i];
+      current.top = Math.max(current.top, previous.top + previous.height + gap);
+    }
+
+    for (let i = slots.length - 1; i >= 0; i -= 1) {
+      const slot = slots[i];
+      slot.top = Math.min(slot.top, bottomLimit - slot.height);
+      if (i < slots.length - 1) {
+        const next = slots[i + 1];
+        slot.top = Math.min(slot.top, next.top - gap - slot.height);
+      }
+      slot.top = Math.max(slot.top, topLimit);
+    }
+
+    const slotsByItem = new Map();
+    slots.forEach(slot => {
+      const lineOffset = getDesignerLineOffset(slot.item, side, settings);
+      const leftMin = 30 + slot.box.textWidth;
+      const leftMax = mapBounds.x0 - sideGap;
+      const rightMin = mapBounds.x1 + sideGap;
+      const rightMax = settings.width - slot.box.textWidth - 30;
+      const leftX = leftMax >= leftMin
+        ? clamp(slot.item.x - lineOffset, leftMin, leftMax)
+        : leftMin;
+      const rightX = rightMax >= rightMin
+        ? clamp(slot.item.x + lineOffset, rightMin, rightMax)
+        : Math.max(30, rightMax);
+
+      slotsByItem.set(slot.item, {
+        side,
+        x: side === "left" ? leftX : rightX,
+        y: slot.top + labelFontSize(slot.box),
+        box: slot.box
+      });
+    });
+
+    return items.map(item => slotsByItem.get(item));
+  }
+
+  function createOrderPreservingHorizontalSlots(items, side, settings, mapBounds) {
+    const margin = Math.max(22, settings.labelSize * 1.4);
+    const sideGap = Math.max(24, settings.labelSize * 1.5);
+    const rowGap = Math.max(16, settings.labelSize * 1.15);
+    const minCenterGap = Math.max(10, settings.labelSize * 0.8);
+    const minX = margin;
+    const maxX = settings.width - margin;
+    const ordered = items.slice().sort((a, b) => a.x - b.x || a.y - b.y);
+    const slots = ordered.map(item => {
+      const box = makeLabelBox(item, side, settings, mapBounds);
+      const currentCenter = item.labelSide === side && Number.isFinite(item.labelX)
+        ? lineEnd(item).x
+        : null;
+      const desiredCenter = currentCenter || item.x + getDesignerHorizontalOffset(item, side, settings);
+      return {
+        item,
+        box,
+        width: box.textWidth,
+        height: labelVisualHeight(box),
+        desiredCenter,
+        centerX: clamp(desiredCenter, minX + box.textWidth / 2, maxX - box.textWidth / 2)
+      };
+    });
+
+    for (let i = 1; i < slots.length; i += 1) {
+      slots[i].centerX = Math.max(slots[i].centerX, slots[i - 1].centerX + minCenterGap);
+    }
+
+    for (let i = slots.length - 1; i >= 0; i -= 1) {
+      slots[i].centerX = Math.min(slots[i].centerX, maxX - slots[i].width / 2);
+      if (i < slots.length - 1) {
+        slots[i].centerX = Math.min(slots[i].centerX, slots[i + 1].centerX - minCenterGap);
+      }
+      slots[i].centerX = Math.max(slots[i].centerX, minX + slots[i].width / 2);
+    }
+
+    const rows = [];
+    slots.forEach(slot => {
+      const left = slot.centerX - slot.width / 2;
+      const right = slot.centerX + slot.width / 2;
+      let rowIndex = rows.findIndex(row => left >= row.right + Math.max(8, settings.labelSize * 0.65));
+      if (rowIndex < 0) {
+        rowIndex = rows.length;
+        rows.push({ right: -Infinity, height: 0 });
+      }
+      rows[rowIndex].right = Math.max(rows[rowIndex].right, right);
+      rows[rowIndex].height = Math.max(rows[rowIndex].height, slot.height);
+      slot.rowIndex = rowIndex;
+    });
+
+    const rowOffsets = [];
+    rows.reduce((offset, row, index) => {
+      rowOffsets[index] = offset;
+      return offset + row.height + rowGap;
+    }, 0);
+
+    const slotsByItem = new Map();
+    slots.forEach(slot => {
+      const rowOffset = rowOffsets[slot.rowIndex] || 0;
+      const fontSize = labelFontSize(slot.box);
+      const topBaseline = mapBounds.y0 - sideGap - rowOffset - slot.height + fontSize;
+      const bottomBaseline = mapBounds.y1 + sideGap + rowOffset + fontSize;
+      const minY = margin + fontSize;
+      const maxY = settings.height - margin - slot.height + fontSize;
+
+      slotsByItem.set(slot.item, {
+        side,
+        x: clamp(slot.centerX - slot.width / 2, minX, maxX - slot.width),
+        y: clamp(side === "top" ? topBaseline : bottomBaseline, minY, maxY),
+        box: slot.box
+      });
+    });
+
+    return items.map(item => slotsByItem.get(item));
+  }
+
+  function createOrderedSideBandTrial(placed, side, settings, mapBounds) {
+    const sideLabels = placed.filter(label => label.labelSide === side);
+    if (sideLabels.length < 2) return placed;
+
+    const replacements = new Map();
+    const slots = side === "left" || side === "right"
+      ? createOrderPreservingVerticalSlots(sideLabels, side, settings, mapBounds)
+      : createOrderPreservingHorizontalSlots(sideLabels, side, settings, mapBounds);
+    slots.forEach((slot, index) => {
+      if (!slot) return;
+      const label = sideLabels[index];
+      replacements.set(getLabelKey(label), makeLabelPlacement(label, slot));
+    });
+
+    return placed.map(label => replacements.get(getLabelKey(label)) || label);
+  }
+
+  function optimizeOrderedSideBands(placed, points, settings, mapBounds) {
+    let best = placed.slice();
+    let bestScore = scoreLayout(best, settings, mapBounds, points);
+    let bestQuality = measurePlacementQuality(best, settings);
+    let bestInversions = countSideOrderInversions(best);
+    if (!layoutOptimizationNeeded(points, settings) && bestInversions === 0) return best;
+
+    for (let pass = 0; pass < 2; pass += 1) {
+      let changed = false;
+
+      ["left", "right", "top", "bottom"].forEach(side => {
+        const trial = createOrderedSideBandTrial(best, side, settings, mapBounds);
+        if (trial === best) return;
+
+        const trialScore = scoreLayout(trial, settings, mapBounds, points);
+        const trialQuality = measurePlacementQuality(trial, settings);
+        const trialInversions = countSideOrderInversions(trial);
+        const fewerHardProblems = trialQuality.hardProblems < bestQuality.hardProblems;
+        const materiallyBetterOrder = trialInversions < bestInversions
+          && trialQuality.hardProblems <= bestQuality.hardProblems
+          && trialScore <= bestScore + labelPlacementWeights.verticalOrderInversion * 4;
+
+        if (fewerHardProblems || trialScore + 0.1 < bestScore || materiallyBetterOrder) {
+          best = trial;
+          bestScore = trialScore;
+          bestQuality = trialQuality;
+          bestInversions = trialInversions;
+          changed = true;
+        }
+      });
+
+      if (!changed) break;
+    }
+
+    return best;
+  }
+
+  function optimizeDenseLayoutWithLocalSearch(placed, points, settings, mapBounds, perimeterCandidateMap = new Map()) {
+    if (!layoutOptimizationNeeded(points, settings)) return placed;
+
+    let best = placed.slice();
+    let bestScore = scoreLayout(best, settings, mapBounds, points);
+    const maxPasses = points.length >= 18 ? 5 : 3;
+    const maxCandidatesPerLabel = points.length >= 18 ? 34 : 44;
+
+    for (let pass = 0; pass < maxPasses; pass += 1) {
+      let changed = false;
+      const ordered = best.slice().sort((a, b) => comparePlacementOrder(a, b, points, settings));
+
+      for (const current of ordered) {
+        const index = best.findIndex(label => getLabelKey(label) === getLabelKey(current));
+        if (index < 0) continue;
+
+        const others = best.filter((_, otherIndex) => otherIndex !== index);
+        const candidates = candidateLabelsForItem(best[index], others, settings, mapBounds, points, perimeterCandidateMap)
+          .slice(0, maxCandidatesPerLabel);
+
+        for (const candidate of candidates) {
+          const trial = best.slice();
+          trial[index] = candidate;
+          const trialScore = scoreLayout(trial, settings, mapBounds, points);
+          if (trialScore + 0.1 < bestScore) {
+            best = trial;
+            bestScore = trialScore;
+            changed = true;
+            break;
+          }
+        }
+      }
+
+      if (!changed) break;
+    }
+
+    return best;
+  }
+
+  function sameLabelPlacement(a, b) {
+    return a
+      && b
+      && getLabelKey(a) === getLabelKey(b)
+      && a.labelSide === b.labelSide
+      && Math.abs(a.labelX - b.labelX) < 0.1
+      && Math.abs(a.labelY - b.labelY) < 0.1;
+  }
+
+  function optimizeDenseLayoutWithAnnealing(placed, points, settings, mapBounds, perimeterCandidateMap = new Map()) {
+    if (!layoutOptimizationNeeded(points, settings) || placed.length < 4) return placed;
+
+    const candidateLists = placed.map((label, index) => {
+      const others = placed.filter((_, otherIndex) => otherIndex !== index);
+      const candidates = candidateLabelsForItem(label, others, settings, mapBounds, points, perimeterCandidateMap)
+        .slice(0, points.length >= 18 ? 56 : 42);
+      if (!candidates.some(candidate => sameLabelPlacement(candidate, label))) candidates.unshift(label);
+      return candidates;
+    });
+
+    let current = placed.slice();
+    let currentScore = scoreLayout(current, settings, mapBounds, points);
+    let best = current.slice();
+    let bestScore = currentScore;
+    let bestQuality = measurePlacementQuality(best, settings);
+    const random = makeSeededRandom(layoutSeed(points, settings));
+    const iterations = points.length >= 18 ? 1800 : 1000;
+    const startTemperature = Math.max(settings.width * 32, bestScore * 0.015);
+    const endTemperature = Math.max(settings.labelSize * 18, 120);
+
+    for (let iteration = 0; iteration < iterations; iteration += 1) {
+      const labelIndex = Math.floor(random() * current.length);
+      const candidates = candidateLists[labelIndex];
+      if (!candidates || candidates.length < 2) continue;
+
+      const candidate = candidates[Math.floor(random() * candidates.length)];
+      if (sameLabelPlacement(candidate, current[labelIndex])) continue;
+
+      const trial = current.slice();
+      trial[labelIndex] = candidate;
+      const trialScore = scoreLayout(trial, settings, mapBounds, points);
+      const progress = iterations <= 1 ? 1 : iteration / (iterations - 1);
+      const temperature = startTemperature * Math.pow(endTemperature / startTemperature, progress);
+      const acceptWorse = Math.exp((currentScore - trialScore) / Math.max(1, temperature)) > random();
+
+      if (trialScore + 0.1 < currentScore || acceptWorse) {
+        current = trial;
+        currentScore = trialScore;
+      }
+
+      if (trialScore + 0.1 < bestScore) {
+        const trialQuality = measurePlacementQuality(trial, settings);
+        if (trialQuality.hardProblems <= bestQuality.hardProblems) {
+          best = trial;
+          bestScore = trialScore;
+          bestQuality = trialQuality;
+        }
+      }
+    }
+
+    return best;
+  }
+
+  function layoutLabelsWithGreedyCandidates(points, settings, mapBounds) {
+    const perimeterCandidateMap = createPerimeterCandidateMap(points, settings, mapBounds);
+    const ordered = points.slice().sort((a, b) => comparePlacementOrder(a, b, points, settings));
+    let placed = [];
+
+    ordered.forEach(item => {
+      placed.push(chooseBestCandidate(item, placed, settings, mapBounds, points, perimeterCandidateMap));
+    });
+
+    for (let pass = 0; pass < 4; pass += 1) {
+      let changed = false;
+      for (let i = 0; i < placed.length; i += 1) {
+        const current = placed[i];
+        const others = placed.filter((_, index) => index !== i);
+        const improved = chooseBestCandidate(current, others, settings, mapBounds, points, perimeterCandidateMap);
+        const currentScore = scoreCandidate(current, others, settings, mapBounds, preferredSide(current, settings, mapBounds), points);
+        const improvedScore = scoreCandidate(improved, others, settings, mapBounds, preferredSide(current, settings, mapBounds), points);
+        if (improvedScore + 0.1 < currentScore) {
+          placed[i] = improved;
+          changed = true;
+        }
+      }
+      if (!changed) break;
+    }
+
+    placed = optimizeDenseLayoutWithLocalSearch(placed, points, settings, mapBounds, perimeterCandidateMap);
+    placed = optimizeDenseLayoutWithAnnealing(placed, points, settings, mapBounds, perimeterCandidateMap);
+    placed = optimizeOrderedSideBands(placed, points, settings, mapBounds);
+
+    const byKey = new Map(placed.map(label => [getLabelKey(label), label]));
+    return points.map(point => byKey.get(getLabelKey(point)) || chooseBestCandidate(point, [], settings, mapBounds, points, perimeterCandidateMap));
+  }
+
+  function layoutLabels(points, settings, mapBounds) {
+    return applyManualLabelPositions(layoutLabelsWithGreedyCandidates(points, settings, mapBounds));
   }
 
   function getLabelKey(row) {
@@ -1427,6 +2865,19 @@
         labelY: manual ? manual.y : d.labelY
       };
     });
+  }
+
+  function rememberLabelPositions(placed) {
+    const positions = {};
+    placed.forEach(label => {
+      const key = label.labelKey || getLabelKey(label);
+      if (!key || !Number.isFinite(label.labelX) || !Number.isFinite(label.labelY)) return;
+      positions[key] = {
+        x: Math.round(label.labelX * 10) / 10,
+        y: Math.round(label.labelY * 10) / 10
+      };
+    });
+    manualLabelPositions = positions;
   }
 
   function lineEnd(d) {
@@ -1452,6 +2903,20 @@
     };
   }
 
+  function labelBackgroundRect(d) {
+    const padX = 8;
+    const padY = 5;
+    const box = labelVisualBox(d);
+    return {
+      x0: box.x0 - padX,
+      y0: box.y0 - padY,
+      x1: box.x1 + padX,
+      y1: box.y1 + padY,
+      centerX: box.centerX,
+      centerY: box.centerY
+    };
+  }
+
   function labelRect(d) {
     return labelVisualBox(d, 10);
   }
@@ -1467,17 +2932,24 @@
     return !(a.x1 < b.x0 || b.x1 < a.x0 || a.y1 < b.y0 || b.y1 < a.y0);
   }
 
+  function rectOverlapArea(a, b) {
+    const width = Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0);
+    const height = Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0);
+    return width > 0 && height > 0 ? width * height : 0;
+  }
+
   function analyzeLayout(placed, settings, projectedProblems, hiddenRegionProblems, mapBounds) {
     let crossings = 0;
     let overlaps = 0;
     const lines = placed
       .filter(d => !d.hideLine)
-      .map(d => ({ start: { x: d.x, y: d.y }, end: lineEnd(d), d }));
+      .map(d => ({ segments: leaderSegmentsForLabel(d, settings), length: leaderPathLength(d, settings), d }));
     const rects = placed.map(labelRect);
 
     for (let i = 0; i < lines.length; i++) {
       for (let j = i + 1; j < lines.length; j++) {
-        if (segmentsCross(lines[i].start, lines[i].end, lines[j].start, lines[j].end)) crossings++;
+        const crosses = lines[i].segments.some(a => lines[j].segments.some(b => segmentsCross(a.start, a.end, b.start, b.end)));
+        if (crosses) crossings++;
       }
     }
 
@@ -1487,11 +2959,7 @@
       }
     }
 
-    const longLines = lines.filter(line => {
-      const dx = line.start.x - line.end.x;
-      const dy = line.start.y - line.end.y;
-      return Math.sqrt(dx * dx + dy * dy) > settings.width * 0.38;
-    }).length;
+    const longLines = lines.filter(line => line.length > maxAllowedLeaderLength(settings)).length;
 
     return { crossings, overlaps, longLines, projectedProblems, hiddenRegionProblems };
   }
@@ -1649,7 +3117,25 @@
 
   function autoPlaceLabels() {
     manualLabelPositions = {};
-    render();
+    scheduleRender({ autoPlace: true });
+  }
+
+  function confirmClearProjectRows() {
+    const rowCount = els.tableBody ? els.tableBody.querySelectorAll("tr").length : 0;
+    if (!rowCount) {
+      setStatusMessage("The project table is already empty.", "warning");
+      return;
+    }
+
+    const label = rowCount === 1 ? "project row" : "project rows";
+    const confirmed = window.confirm(`Clear ${rowCount} ${label} from Project points?\n\nThis cannot be undone unless you reload or reopen a saved project.`);
+    if (!confirmed) {
+      setStatusMessage("Clear table cancelled.", "warning");
+      return;
+    }
+
+    setRows([]);
+    setStatusMessage("Project table cleared.", "ok");
   }
 
   function getSavedDataTable() {
@@ -1672,9 +3158,9 @@
 
   function switchDataTable(tableName) {
     const tabs = [
-      { name: "projects", title: "Project table", tab: els.projectTableTab, pane: els.projectTablePane, actions: "projects" },
+      { name: "projects", title: "Project points", tab: els.projectTableTab, pane: els.projectTablePane, actions: "projects" },
       { name: "regions", title: "Map regions", tab: els.regionTableTab, pane: els.regionTablePane, actions: "regions" },
-      { name: "preview", title: "Preview", tab: els.previewTableTab, pane: els.previewTablePane, actions: "" }
+      { name: "preview", title: "Preview", tab: els.previewTableTab, pane: els.previewTablePane, actions: "preview" }
     ];
     const activeName = tabs.some(tab => tab.name === tableName) ? tableName : "projects";
     const activeTab = tabs.find(tab => tab.name === activeName);
@@ -1694,8 +3180,24 @@
     saveActiveDataTable(activeName);
   }
 
-  function render() {
-    const settings = getSettings();
+  function clearPreviewInteractionOverlays() {
+    d3.select(els.svg.node()).selectAll(".map-scale-controls, .distance-markers").remove();
+  }
+
+  function showMapScaleControls() {
+    if (!lastLayout || !lastLayout.settings || !lastLayout.mapBounds) return;
+    mapScaleControlsVisible = true;
+    clearPreviewInteractionOverlays();
+    drawMapScaleControls(els.svg, lastLayout.settings, lastLayout.mapBounds);
+  }
+
+  function hideMapScaleControls() {
+    mapScaleControlsVisible = false;
+    clearPreviewInteractionOverlays();
+  }
+
+  function render(options = {}) {
+    let settings = getSettings();
     const rows = getRows();
     const svg = els.svg;
     svg.selectAll("*").remove();
@@ -1732,56 +3234,52 @@
       return;
     }
 
-    const projection = createProjection(visibleGeo, settings);
+    const shouldAutoPlace = Boolean(options.autoPlace);
+    const layoutContext = shouldAutoPlace
+      ? chooseFeasibleMapLayoutContext(visibleGeo, rows, settings)
+      : createMapLayoutContext(visibleGeo, rows, settings);
+    settings = layoutContext.settings;
+    if (shouldAutoPlace && layoutContext.requestedMapScale && layoutContext.requestedMapScale !== settings.mapScale) {
+      els.mapScaleInput.value = settings.mapScale;
+    }
+    settings.layoutObstacles = getLayoutBoxObstacles(settings, layoutContext.calloutRows);
+    const {
+      projection,
+      path,
+      mapBounds,
+      mappedRows,
+      calloutRows,
+      projectedProblems,
+      hiddenRegionProblems
+    } = layoutContext;
 
-    const path = d3.geoPath(projection);
-    const mapBoundsArray = path.bounds(visibleGeo);
-    const mapBounds = {
-      x0: mapBoundsArray[0][0],
-      y0: mapBoundsArray[0][1],
-      x1: mapBoundsArray[1][0],
-      y1: mapBoundsArray[1][1]
-    };
+    svg.on("click", event => {
+      if (event.target === svg.node() && mapScaleControlsVisible) {
+        hideMapScaleControls();
+      }
+    });
 
     svg.append("g")
+      .attr("class", "map-layer")
       .selectAll("path")
       .data(visibleGeo.features)
       .join("path")
       .attr("class", "province")
       .attr("d", path)
-      .attr("fill", (d, i) => getRegionFill(d, i));
-
-    const mappedRows = [];
-    const calloutRows = [];
-    const projectedProblems = [];
-    const hiddenRegionProblems = [];
-
-    rows.forEach(row => {
-      const hasCoords = row.lon !== "" && row.lat !== "";
-      if (!hasCoords) {
-        calloutRows.push(row);
-        return;
-      }
-      const hiddenRegion = getHiddenRegionForPoint(Number(row.lon), Number(row.lat));
-      if (hiddenRegion) {
-        hiddenRegionProblems.push(`${row.name || "Unnamed point"} (${hiddenRegion})`);
-        return;
-      }
-      const projected = projection([Number(row.lon), Number(row.lat)]);
-      if (!projected || !Number.isFinite(projected[0]) || !Number.isFinite(projected[1])) {
-        projectedProblems.push(row.name || "Unnamed point");
-        return;
-      }
-      mappedRows.push({ ...row, x: projected[0], y: projected[1] });
-    });
+      .attr("fill", (d, i) => getRegionFill(d, i))
+      .on("click", event => {
+        event.stopPropagation();
+        showMapScaleControls();
+      });
 
     const labelRows = mappedRows.filter(row => row.name);
     const placed = layoutLabels(labelRows, settings, mapBounds);
+    rememberLabelPositions(placed);
     const placedByRowId = new Map(placed.map(row => [row.rowId, row]));
     const markerRows = mappedRows.map(row => placedByRowId.get(row.rowId) || row);
     const leaderRows = placed.filter(row => !row.hideLine);
     const report = analyzeLayout(placed, settings, projectedProblems, hiddenRegionProblems, mapBounds);
-    lastLayout = { placed, settings, report };
+    lastLayout = { placed, settings, report, mapBounds, feasibility: layoutContext.feasibility };
 
     const leaderLayer = svg.append("g").attr("class", "leader-layer");
     if (settings.showLineCasing) {
@@ -1790,16 +3288,20 @@
         .join("path")
         .attr("class", "leader-casing")
         .attr("data-layout-id", d => d.layoutId)
+        .attr("data-label-side", d => d.labelSide)
+        .attr("data-label-name", d => d.name)
         .attr("stroke-width", d => getCategoryLineWidth(getCategory(d.type), settings) + 3.5)
-        .attr("d", d => linePath(d));
+        .attr("d", d => linePath(d, settings));
     }
     leaderLayer.selectAll("path.leader-line")
       .data(leaderRows)
       .join("path")
       .attr("class", "leader-line")
       .attr("data-layout-id", d => d.layoutId)
+      .attr("data-label-side", d => d.labelSide)
+      .attr("data-label-name", d => d.name)
       .attr("stroke-width", d => getCategoryLineWidth(getCategory(d.type), settings))
-      .attr("d", d => linePath(d));
+      .attr("d", d => linePath(d, settings));
 
     const markerLayer = svg.append("g").attr("class", "marker-layer");
     const markers = markerLayer.selectAll(".marker")
@@ -1821,6 +3323,8 @@
       .join("rect")
       .attr("class", "map-label-background")
       .attr("data-layout-id", d => d.layoutId)
+      .attr("data-label-side", d => d.labelSide)
+      .attr("data-label-name", d => d.name)
       .each(function (d) {
         positionLabelBackground(d3.select(this), d);
       });
@@ -1833,6 +3337,8 @@
       .attr("font-size", settings.labelSizeRender)
       .attr("font-family", settings.fontFamily)
       .attr("data-layout-id", d => d.layoutId)
+      .attr("data-label-side", d => d.labelSide)
+      .attr("data-label-name", d => d.name)
       .attr("x", d => d.labelX)
       .attr("y", d => d.labelY)
       .attr("text-anchor", d => d.anchor);
@@ -1851,7 +3357,8 @@
     attachLabelDragging(labels);
 
     if (settings.showCallouts && calloutRows.length) drawCallouts(svg, calloutRows, settings, mapBounds);
-    if (settings.showLegend) drawLegend(svg, settings);
+    if (settings.showLegend) drawLegend(svg, settings, mapBounds);
+    if (mapScaleControlsVisible) drawMapScaleControls(svg, settings, mapBounds);
     updateStatus(rows, mappedRows, calloutRows, report, true);
     if (!els.regionTableBody.contains(document.activeElement)) renderRegionValueTable();
   }
@@ -1865,14 +3372,198 @@
       .text(value);
   }
 
+  function drawMapScaleControls(svg, settings, mapBounds) {
+    const pad = 8;
+    const x0 = mapBounds.x0 - pad;
+    const y0 = mapBounds.y0 - pad;
+    const x1 = mapBounds.x1 + pad;
+    const y1 = mapBounds.y1 + pad;
+    const width = x1 - x0;
+    const height = y1 - y0;
+    const center = {
+      x: (x0 + x1) / 2,
+      y: (y0 + y1) / 2
+    };
+    const handleSize = 9;
+    const handles = [
+      { id: "nw", x: x0, y: y0 },
+      { id: "n", x: center.x, y: y0 },
+      { id: "ne", x: x1, y: y0 },
+      { id: "e", x: x1, y: center.y },
+      { id: "se", x: x1, y: y1 },
+      { id: "s", x: center.x, y: y1 },
+      { id: "sw", x: x0, y: y1 },
+      { id: "w", x: x0, y: center.y }
+    ];
+    const guideLength = 18;
+    const mapRect = { x0, y0, x1, y1 };
+    drawDistanceMarkers(svg, settings, mapRect, { includeNearbyLabels: true });
+
+    function boundsForScale(scale) {
+      const ratio = normalizeMapScale(scale) / settings.mapScale;
+      const scaledWidth = width * ratio;
+      const scaledHeight = height * ratio;
+      return {
+        x0: center.x - scaledWidth / 2,
+        y0: center.y - scaledHeight / 2,
+        x1: center.x + scaledWidth / 2,
+        y1: center.y + scaledHeight / 2,
+        width: scaledWidth,
+        height: scaledHeight
+      };
+    }
+
+    function handlesForBounds(bounds) {
+      return [
+        { id: "nw", x: bounds.x0, y: bounds.y0 },
+        { id: "n", x: center.x, y: bounds.y0 },
+        { id: "ne", x: bounds.x1, y: bounds.y0 },
+        { id: "e", x: bounds.x1, y: center.y },
+        { id: "se", x: bounds.x1, y: bounds.y1 },
+        { id: "s", x: center.x, y: bounds.y1 },
+        { id: "sw", x: bounds.x0, y: bounds.y1 },
+        { id: "w", x: bounds.x0, y: center.y }
+      ];
+    }
+
+    function updateMapScalePreview(overlay, bounds, scale) {
+      overlay.select(".map-scale-selection")
+        .attr("x", bounds.x0)
+        .attr("y", bounds.y0)
+        .attr("width", bounds.width)
+        .attr("height", bounds.height);
+
+      overlay.select(".map-scale-center-guide-vertical")
+        .attr("x1", center.x)
+        .attr("y1", Math.max(0, bounds.y0 - guideLength))
+        .attr("x2", center.x)
+        .attr("y2", Math.min(settings.height, bounds.y1 + guideLength));
+
+      overlay.select(".map-scale-center-guide-horizontal")
+        .attr("x1", Math.max(0, bounds.x0 - guideLength))
+        .attr("y1", center.y)
+        .attr("x2", Math.min(settings.width, bounds.x1 + guideLength))
+        .attr("y2", center.y);
+
+      overlay.selectAll("rect.map-scale-handle")
+        .data(handlesForBounds(bounds), d => d.id)
+        .attr("x", d => d.x - handleSize / 2)
+        .attr("y", d => d.y - handleSize / 2);
+
+      const previewText = `${scale}%`;
+      const previewWidth = Math.max(48, previewText.length * 9 + 18);
+      const previewX = clamp(bounds.x1 + 10, 8, settings.width - previewWidth - 8);
+      const previewY = clamp(bounds.y0 - 22, 8, settings.height - 24);
+      overlay.select(".map-scale-badge")
+        .attr("transform", `translate(${previewX},${previewY})`);
+      overlay.select(".map-scale-badge rect")
+        .attr("width", previewWidth);
+      overlay.select(".map-scale-badge text")
+        .text(previewText);
+    }
+
+    const overlay = svg.append("g")
+      .attr("class", "map-scale-controls")
+      .on("click", event => event.stopPropagation());
+
+    overlay.append("rect")
+      .attr("class", "map-scale-selection")
+      .attr("x", x0)
+      .attr("y", y0)
+      .attr("width", width)
+      .attr("height", height);
+
+    overlay.append("line")
+      .attr("class", "map-scale-center-guide map-scale-center-guide-vertical")
+      .attr("x1", center.x)
+      .attr("y1", Math.max(0, y0 - guideLength))
+      .attr("x2", center.x)
+      .attr("y2", Math.min(settings.height, y1 + guideLength));
+
+    overlay.append("line")
+      .attr("class", "map-scale-center-guide map-scale-center-guide-horizontal")
+      .attr("x1", Math.max(0, x0 - guideLength))
+      .attr("y1", center.y)
+      .attr("x2", Math.min(settings.width, x1 + guideLength))
+      .attr("y2", center.y);
+
+    overlay.append("circle")
+      .attr("class", "map-scale-center-point")
+      .attr("cx", center.x)
+      .attr("cy", center.y)
+      .attr("r", 3);
+
+    const badgeText = `${settings.mapScale}%`;
+    const badgeX = clamp(x1 + 10, 8, settings.width - 58);
+    const badgeY = clamp(y0 - 22, 8, settings.height - 24);
+    const badge = overlay.append("g")
+      .attr("class", "map-scale-badge")
+      .attr("transform", `translate(${badgeX},${badgeY})`);
+    badge.append("rect")
+      .attr("width", Math.max(48, badgeText.length * 9 + 18))
+      .attr("height", 22)
+      .attr("rx", 4);
+    badge.append("text")
+      .attr("x", 9)
+      .attr("y", 15)
+      .text(badgeText);
+
+    overlay.selectAll("rect.map-scale-handle")
+      .data(handles)
+      .join("rect")
+      .attr("class", d => `map-scale-handle map-scale-handle-${d.id}`)
+      .attr("x", d => d.x - handleSize / 2)
+      .attr("y", d => d.y - handleSize / 2)
+      .attr("width", handleSize)
+      .attr("height", handleSize)
+      .call(d3.drag()
+        .on("start", function (event, d) {
+          const pointer = d3.pointer(event, els.svg.node());
+          d.startScale = settings.mapScale;
+          d.scaleChanged = false;
+          d.center = center;
+          d.startDistance = Math.max(1, Math.hypot(pointer[0] - center.x, pointer[1] - center.y));
+          clearDistanceMarkers();
+          overlay.classed("is-previewing", true);
+          d3.select(this).classed("is-dragging", true);
+        })
+        .on("drag", function (event, d) {
+          const pointer = d3.pointer(event, els.svg.node());
+          const currentDistance = Math.max(1, Math.hypot(pointer[0] - d.center.x, pointer[1] - d.center.y));
+          const nextScale = normalizeMapScale(d.startScale * currentDistance / d.startDistance);
+          if (String(nextScale) === String(els.mapScaleInput.value)) return;
+          d.scaleChanged = true;
+          els.mapScaleInput.value = nextScale;
+          updateMapScalePreview(overlay, boundsForScale(nextScale), nextScale);
+        })
+        .on("end", function (event, d) {
+          d3.select(this).classed("is-dragging", false);
+          overlay.classed("is-previewing", false);
+          if (d.scaleChanged) {
+            scheduleRender();
+            setStatusMessage("Map size changed. Press Run auto-place to recalculate placement for the new map size.", "ok");
+          }
+        }));
+  }
+
   function attachLabelDragging(labels) {
     labels.call(d3.drag()
-      .on("start", function () {
+      .on("start", function (event, d) {
+        d.dragStartX = d.labelX;
+        d.dragStartY = d.labelY;
+        d.dragAxis = null;
         d3.select(this).classed("is-dragging", true);
       })
       .on("drag", function (event, d) {
-        d.labelX += event.dx;
-        d.labelY += event.dy;
+        const settings = getSettings();
+        let next = constrainShiftDrag(
+          { x: d.dragStartX, y: d.dragStartY },
+          { x: d.labelX + event.dx, y: d.labelY + event.dy },
+          d,
+          event
+        );
+        d.labelX = next.x;
+        d.labelY = next.y;
         manualLabelPositions[d.labelKey] = { x: d.labelX, y: d.labelY };
 
         const label = d3.select(this)
@@ -1884,9 +3575,19 @@
           .call(node => positionLabelBackground(node, d));
 
         d3.selectAll(`path[data-layout-id="${d.layoutId}"]`)
-          .attr("d", linePath(d));
+          .attr("d", linePath(d, settings));
+
+        drawDistanceMarkers(els.svg, settings, labelVisualBox(d, 8), {
+          mapBounds: lastLayout ? lastLayout.mapBounds : null,
+          includeNearbyLabels: true,
+          activeLabelKey: d.labelKey
+        });
       })
-      .on("end", function () {
+      .on("end", function (event, d) {
+        delete d.dragStartX;
+        delete d.dragStartY;
+        delete d.dragAxis;
+        clearDistanceMarkers();
         d3.select(this).classed("is-dragging", false);
       }));
   }
@@ -1897,17 +3598,31 @@
         const pointer = d3.pointer(event, els.svg.node());
         d.dragOffsetX = d.x - pointer[0];
         d.dragOffsetY = d.y - pointer[1];
+        d.dragStartX = d.x;
+        d.dragStartY = d.y;
+        d.dragAxis = null;
         d3.select(this).classed("is-dragging", true);
       })
       .on("drag", function (event, d) {
         const pointer = d3.pointer(event, els.svg.node());
-        d.x = pointer[0] + d.dragOffsetX;
-        d.y = pointer[1] + d.dragOffsetY;
+        const next = constrainShiftDrag(
+          { x: d.dragStartX, y: d.dragStartY },
+          { x: pointer[0] + d.dragOffsetX, y: pointer[1] + d.dragOffsetY },
+          d,
+          event
+        );
+        d.x = next.x;
+        d.y = next.y;
         moveMarkerNode(d3.select(this), d, { markerSize: getCategoryMarkerSize(getCategory(d.type), settings) });
         d3.selectAll(`path[data-layout-id="${d.layoutId}"]`)
-          .attr("d", linePath(d));
+          .attr("d", linePath(d, settings));
       })
       .on("end", function (event, d) {
+        delete d.dragOffsetX;
+        delete d.dragOffsetY;
+        delete d.dragStartX;
+        delete d.dragStartY;
+        delete d.dragAxis;
         d3.select(this).classed("is-dragging", false);
         const coordinates = projection.invert([d.x, d.y]);
         if (!coordinates || !Number.isFinite(coordinates[0]) || !Number.isFinite(coordinates[1])) {
@@ -1925,14 +3640,12 @@
   }
 
   function positionLabelBackground(node, d) {
-    const padX = 8;
-    const padY = 5;
-    const box = labelVisualBox(d);
+    const box = labelBackgroundRect(d);
 
-    node.attr("x", box.x0 - padX)
-      .attr("y", box.y0 - padY)
-      .attr("width", box.x1 - box.x0 + padX * 2)
-      .attr("height", box.y1 - box.y0 + padY * 2);
+    node.attr("x", box.x0)
+      .attr("y", box.y0)
+      .attr("width", box.x1 - box.x0)
+      .attr("height", box.y1 - box.y0);
   }
 
   function moveMarkerNode(node, d, settings) {
@@ -1979,6 +3692,7 @@
     if (active.classList.contains("name-input")) fieldIndex = tableFields.indexOf("name");
     if (active.classList.contains("footnote-input")) fieldIndex = tableFields.indexOf("footnote");
     if (active.classList.contains("type-input")) fieldIndex = tableFields.indexOf("type");
+    if (active.classList.contains("priority-input")) fieldIndex = tableFields.indexOf("priority");
     if (active.classList.contains("lon-input")) fieldIndex = tableFields.indexOf("lon");
     if (active.classList.contains("lat-input")) fieldIndex = tableFields.indexOf("lat");
 
@@ -2071,6 +3785,7 @@
     if (field === "name") tr.querySelector(".name-input").value = String(value || "").trim();
     if (field === "footnote") tr.querySelector(".footnote-input").value = normalizeFootnote(value);
     if (field === "type") tr.querySelector(".type-input").value = cleanType(value);
+    if (field === "priority") tr.querySelector(".priority-input").value = toPriority(value);
     if (field === "lon") tr.querySelector(".lon-input").value = toNumber(value);
     if (field === "lat") tr.querySelector(".lat-input").value = toNumber(value);
   }
@@ -2205,19 +3920,44 @@
     }
     syncCategorySettingsFromControls();
     updateTypeOptions();
-    render();
+    scheduleRender();
   }
 
   function handleLayoutSettingsChange(event) {
+    const target = event ? event.target : null;
+    if (target === els.showLegendInput && setMapFurnitureVisibility("legend", target.checked, target, "Legend")) return;
+    if (target === els.showCalloutsInput && setMapFurnitureVisibility("callouts", target.checked, target, "No-coordinate callouts")) return;
+    if (target === els.showLineCasingInput) {
+      const hasLayer = setPreviewLayerVisibility(".leader-casing", target.checked);
+      if (!target.checked || hasLayer) {
+        setStatusMessage(`Leader casing ${target.checked ? "shown" : "hidden"}.`, "ok");
+        return;
+      }
+    }
+    if (target === els.showDistanceMarkersInput) {
+      clearDistanceMarkers();
+      setStatusMessage(`Distance markers ${target.checked ? "enabled" : "disabled"} for dragging.`, "ok");
+      return;
+    }
+
     if (event && event.target === els.bookSizeInput) {
       renderImageSizeOptions();
+    }
+
+    if (event && (event.target === els.bookSizeInput || event.target === els.imageSizeInput)) {
+      saveLayoutPreferences();
     }
 
     if (event && (event.target === els.markerSizeInput || event.target === els.lineWidthInput)) {
       syncDefaultCategorySizes();
     }
-    renderCategoryEditors();
-    render();
+    if (!target || target === els.markerSizeInput || target === els.lineWidthInput) {
+      renderCategoryEditors();
+    }
+    scheduleRender();
+    if (event && event.target === els.mapScaleInput) {
+      setStatusMessage("Map size changed. Press Run auto-place to recalculate placement for the new map size.", "ok");
+    }
   }
 
   function resetLayoutInputToDefault(button) {
@@ -2250,7 +3990,7 @@
     });
     renderCategoryEditors();
     updateTypeOptions();
-    render();
+    scheduleRender();
   }
 
   function toggleCategory(categoryId) {
@@ -2262,39 +4002,114 @@
 
   function removeCategory(categoryId) {
     const category = categorySettings.find(item => item.id === categoryId);
-    if (!category || !category.removable) return;
+    if (!category) return;
     if (categorySettings.length <= 1) {
       setStatusMessage("At least one legend marker is required.", "warning");
       return;
     }
 
+    const replacementCategory = categorySettings.find(item => item.id !== categoryId) || getDefaultCategory();
     Array.from(els.tableBody.querySelectorAll(".type-input")).forEach(select => {
-      if (select.value === categoryId) select.value = getDefaultCategory().id;
+      if (select.value === categoryId) select.value = replacementCategory.id;
     });
     categorySettings.splice(categorySettings.indexOf(category), 1);
     renderCategoryEditors();
     updateTypeOptions();
-    render();
+    scheduleRender();
   }
 
-  function moveCategory(categoryId, direction) {
-    const index = categorySettings.findIndex(category => category.id === categoryId);
-    if (index < 0) return;
+  function clearCategoryDropIndicators() {
+    if (!els.categoryList) return;
+    els.categoryList.querySelectorAll(".category-editor").forEach(editor => {
+      editor.classList.remove("is-dragging", "is-drop-before", "is-drop-after");
+    });
+    activeCategoryDropEditor = null;
+    activeCategoryDropPlacement = null;
+  }
 
-    const targetIndex = direction === "up" ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= categorySettings.length) return;
+  function clearCategoryDropTargets() {
+    if (activeCategoryDropEditor) {
+      activeCategoryDropEditor.classList.remove("is-drop-before", "is-drop-after");
+    }
+    activeCategoryDropEditor = null;
+    activeCategoryDropPlacement = null;
+  }
 
-    const category = categorySettings[index];
-    categorySettings.splice(index, 1);
-    categorySettings.splice(targetIndex, 0, category);
+  function setCategoryDropTarget(editor, placement) {
+    if (activeCategoryDropEditor === editor && activeCategoryDropPlacement === placement) return;
+    clearCategoryDropTargets();
+    activeCategoryDropEditor = editor;
+    activeCategoryDropPlacement = placement;
+    editor.classList.toggle("is-drop-before", placement === "before");
+    editor.classList.toggle("is-drop-after", placement === "after");
+  }
+
+  function reorderCategory(categoryId, targetCategoryId, placement) {
+    if (!categoryId || !targetCategoryId || categoryId === targetCategoryId) return false;
+    const fromIndex = categorySettings.findIndex(category => category.id === categoryId);
+    const targetIndex = categorySettings.findIndex(category => category.id === targetCategoryId);
+    if (fromIndex < 0 || targetIndex < 0) return false;
+
+    const [category] = categorySettings.splice(fromIndex, 1);
+    const adjustedTargetIndex = categorySettings.findIndex(item => item.id === targetCategoryId);
+    const insertIndex = placement === "after" ? adjustedTargetIndex + 1 : adjustedTargetIndex;
+    categorySettings.splice(insertIndex, 0, category);
     renderCategoryEditors();
     updateTypeOptions();
-    render();
+    scheduleRender();
+    return true;
   }
 
-  function linePath(d) {
-    const end = lineEnd(d);
-    return `M${d.x},${d.y} L${end.x},${end.y}`;
+  function getCategoryDropPlacement(event, editor) {
+    const rect = editor.getBoundingClientRect();
+    return event.clientY > rect.top + rect.height / 2 ? "after" : "before";
+  }
+
+  function handleCategoryDragStart(event) {
+    const handle = event.target.closest(".category-drag-handle");
+    if (!handle) return;
+    draggedCategoryId = handle.dataset.categoryId;
+    const editor = handle.closest(".category-editor");
+    if (editor) editor.classList.add("is-dragging");
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", draggedCategoryId);
+    }
+  }
+
+  function handleCategoryDragOver(event) {
+    if (!draggedCategoryId) return;
+    const editor = event.target.closest(".category-editor");
+    if (!editor || !els.categoryList.contains(editor) || editor.dataset.categoryId === draggedCategoryId) {
+      clearCategoryDropTargets();
+      return;
+    }
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    const placement = getCategoryDropPlacement(event, editor);
+    setCategoryDropTarget(editor, placement);
+  }
+
+  function handleCategoryDrop(event) {
+    if (!draggedCategoryId) return;
+    const editor = event.target.closest(".category-editor");
+    if (!editor || !els.categoryList.contains(editor)) return;
+    event.preventDefault();
+    const placement = getCategoryDropPlacement(event, editor);
+    const moved = reorderCategory(draggedCategoryId, editor.dataset.categoryId, placement);
+    clearCategoryDropIndicators();
+    if (moved) setStatusMessage("Legend marker order updated.", "ok");
+    draggedCategoryId = null;
+  }
+
+  function handleCategoryDragEnd() {
+    draggedCategoryId = null;
+    clearCategoryDropIndicators();
+  }
+
+  function linePath(d, settings = getSettings()) {
+    const points = leaderPathPoints(d, settings);
+    return points.map((point, index) => `${index === 0 ? "M" : "L"}${point.x},${point.y}`).join(" ");
   }
 
   function translatePosition(position) {
@@ -2308,43 +4123,324 @@
     };
   }
 
+  function clampBoxDimensions(dimensions, constraints, settings) {
+    const minWidth = constraints && Number.isFinite(constraints.minWidth) ? constraints.minWidth : 80;
+    const minHeight = constraints && Number.isFinite(constraints.minHeight) ? constraints.minHeight : 40;
+    const maxWidth = Math.max(minWidth, Math.min(
+      constraints && Number.isFinite(constraints.maxWidth) ? constraints.maxWidth : settings.width,
+      settings.width
+    ));
+    const maxHeight = Math.max(minHeight, Math.min(
+      constraints && Number.isFinite(constraints.maxHeight) ? constraints.maxHeight : settings.height,
+      settings.height
+    ));
+    return {
+      width: Math.max(minWidth, Math.min(maxWidth, dimensions.width)),
+      height: Math.max(minHeight, Math.min(maxHeight, dimensions.height))
+    };
+  }
+
+  function getBoxDimensions(key, fallback, constraints, settings) {
+    const manual = manualBoxPositions[key];
+    return clampBoxDimensions({
+      width: manual && Number.isFinite(manual.width) ? manual.width : fallback.width,
+      height: manual && Number.isFinite(manual.height) ? manual.height : fallback.height
+    }, constraints, settings);
+  }
+
   function getBoxPosition(key, fallback, dimensions, settings) {
     const manual = manualBoxPositions[key];
     const position = manual && Number.isFinite(manual.x) && Number.isFinite(manual.y) ? manual : fallback;
     return clampBoxPosition(position, dimensions, settings);
   }
 
-  function attachBoxDragging(group, key, position, dimensions, settings, label) {
+  function saveManualBoxState(key, position, dimensions) {
+    manualBoxPositions[key] = {
+      ...(manualBoxPositions[key] || {}),
+      x: Math.round(position.x * 10) / 10,
+      y: Math.round(position.y * 10) / 10,
+      width: Math.round(dimensions.width * 10) / 10,
+      height: Math.round(dimensions.height * 10) / 10
+    };
+  }
+
+  function getLegendBoxLayout(settings) {
+    const compact = settings.compactFurniture !== false;
+    const headingSize = Math.max(settings.labelSize, Math.round(settings.labelSize * 1.02));
+    const headingSizeRender = Math.max(settings.labelSizeRender, Math.round(settings.labelSizeRender * 1.02));
+    const rowHeight = Math.max(compact ? 26 : 31, Math.round(settings.labelSize * (compact ? 1.85 : 2.15)));
+    const headingHeight = Math.max(compact ? 24 : 30, Math.round(headingSize * (compact ? 1.45 : 1.7)));
+    const verticalPadding = Math.max(compact ? 10 : 14, Math.round(settings.labelSize * (compact ? 0.8 : 1.05)));
+    const longestLabelLength = Math.max(6, ...categorySettings.map(category => category.label.length));
+    const widthPad = compact ? 75 : 105;
+    const fallbackDimensions = {
+      width: Math.max(compact ? 235 : 275, Math.min(390, Math.round(longestLabelLength * settings.labelSize * 0.58 + widthPad))),
+      height: verticalPadding * 2 + headingHeight + categorySettings.length * rowHeight
+    };
+    const constraints = {
+      minWidth: Math.max(compact ? 210 : 250, Math.round(longestLabelLength * settings.labelSizeRender * 0.58 + (compact ? 82 : 110))),
+      minHeight: fallbackDimensions.height,
+      maxWidth: settings.width - 20,
+      maxHeight: settings.height - 20
+    };
+    const dimensions = getBoxDimensions("legend", fallbackDimensions, constraints, settings);
+    const position = getBoxPosition("legend", { x: 40, y: settings.height - 150 }, dimensions, settings);
+    return {
+      dimensions,
+      position,
+      constraints,
+      headingSizeRender,
+      rowHeight,
+      headingHeight,
+      verticalPadding
+    };
+  }
+
+  function getCalloutContentLayout(calloutRows, settings, width) {
+    const compact = settings.compactFurniture !== false;
+    const subtitleText = "Canada-wide, not shown on map";
+    const nameSize = settings.labelSizeRender;
+    const subtitleSizePt = Math.max(10, Math.round(settings.labelSize * 0.85));
+    const subtitleSize = Math.max(9, Math.round(nameSize * 0.85));
+    const lineH = Math.max(compact ? 18 : 21, Math.round(nameSize * (compact ? 1.45 : 1.65)));
+    const subLineH = Math.max(compact ? 15 : 18, Math.round(subtitleSize * (compact ? 1.35 : 1.55)));
+    const rowGap = Math.max(compact ? 6 : 10, Math.round(settings.labelSizeRender * (compact ? 0.55 : 0.75)));
+    const padV = Math.max(compact ? 12 : 16, Math.round(settings.labelSize * (compact ? 0.75 : 1.05)));
+    const textX = 52;
+    const markerX = 26;
+    const rightPad = compact ? 18 : 26;
+    const textWidth = Math.max(90, width - textX - rightPad);
+    const maxNameChars = Math.max(12, Math.floor(textWidth / Math.max(6, nameSize * 0.58)));
+    let cursorY = padV;
+    const rows = calloutRows.map((row, index) => {
+      const nameLines = wrapLabel(row.name, maxNameChars);
+      const nameHeight = nameLines.length * lineH;
+      const rowHeight = nameHeight + subLineH;
+      const layout = {
+        row,
+        rowY: cursorY,
+        rowHeight,
+        nameLines,
+        subtitleY: cursorY + nameHeight
+      };
+      cursorY += rowHeight + (index < calloutRows.length - 1 ? rowGap : 0);
+      return layout;
+    });
+
+    return {
+      subtitleText,
+      nameSize,
+      subtitleSize,
+      lineH,
+      subLineH,
+      rowGap,
+      padV,
+      textX,
+      markerX,
+      rows,
+      contentHeight: Math.max(padV * 2, cursorY + padV)
+    };
+  }
+
+  function getCalloutBoxLayout(calloutRows, settings) {
+    const compact = settings.compactFurniture !== false;
+    const longestNameLen = Math.max(0, ...calloutRows.map(row => String(row.name || "").length));
+    const boxPad = compact ? 80 : 110;
+    const nameWidth = longestNameLen * settings.labelSize * 0.58 + boxPad;
+    const subWidth = "Canada-wide, not shown on map".length * Math.max(10, Math.round(settings.labelSize * 0.85)) * 0.56 + boxPad;
+    const fallbackWidth = Math.max(compact ? 220 : 260, Math.min(settings.width - 40, Math.round(Math.max(nameWidth, subWidth))));
+    const widthConstraints = {
+      minWidth: compact ? 220 : 260,
+      minHeight: 40,
+      maxWidth: settings.width - 20,
+      maxHeight: settings.height - 20
+    };
+    const widthOnly = getBoxDimensions("callouts", { width: fallbackWidth, height: 40 }, widthConstraints, settings).width;
+    const content = getCalloutContentLayout(calloutRows, settings, widthOnly);
+    const fallbackDimensions = {
+      width: widthOnly,
+      height: content.contentHeight
+    };
+    const constraints = {
+      minWidth: widthConstraints.minWidth,
+      minHeight: content.contentHeight,
+      maxWidth: widthConstraints.maxWidth,
+      maxHeight: widthConstraints.maxHeight
+    };
+    const dimensions = getBoxDimensions("callouts", fallbackDimensions, constraints, settings);
+    const fittedContent = dimensions.width === widthOnly
+      ? content
+      : getCalloutContentLayout(calloutRows, settings, dimensions.width);
+    dimensions.height = Math.max(dimensions.height, fittedContent.contentHeight);
+    const fallback = {
+      x: Math.max(30, settings.width - dimensions.width - 30),
+      y: 30
+    };
+    const position = getBoxPosition("callouts", fallback, dimensions, settings);
+    return {
+      dimensions,
+      position,
+      constraints: { ...constraints, minHeight: fittedContent.contentHeight },
+      ...fittedContent
+    };
+  }
+
+  function getLayoutBoxObstacles(settings, calloutRows) {
+    const pad = Math.max(12, Math.round(settings.labelSize * 0.8));
+    const obstacles = [];
+    if (settings.showLegend) {
+      const legend = getLegendBoxLayout(settings);
+      obstacles.push({
+        key: "legend",
+        rect: inflateRect(rectFromPosition(legend.position, legend.dimensions), pad)
+      });
+    }
+    if (settings.showCallouts && calloutRows.length) {
+      const callouts = getCalloutBoxLayout(calloutRows, settings);
+      obstacles.push({
+        key: "callouts",
+        rect: inflateRect(rectFromPosition(callouts.position, callouts.dimensions), pad)
+      });
+    }
+    return obstacles;
+  }
+
+  function attachBoxDragging(group, key, position, dimensions, settings, label, mapBounds) {
     const state = { x: position.x, y: position.y };
     group.call(d3.drag()
       .on("start", function () {
+        state.dragStartX = state.x;
+        state.dragStartY = state.y;
+        state.axis = null;
         d3.select(this).classed("is-dragging", true);
       })
       .on("drag", function (event) {
-        const next = clampBoxPosition({ x: state.x + event.dx, y: state.y + event.dy }, dimensions, settings);
+        const constrained = constrainShiftDrag(
+          { x: state.dragStartX, y: state.dragStartY },
+          { x: state.x + event.dx, y: state.y + event.dy },
+          state,
+          event
+        );
+        const next = clampBoxPosition(constrained, dimensions, settings);
         state.x = next.x;
         state.y = next.y;
-        manualBoxPositions[key] = next;
+        saveManualBoxState(key, next, dimensions);
         d3.select(this).attr("transform", translatePosition(next));
+        const subjectRect = rectFromPosition(next, dimensions);
+        drawDistanceMarkers(els.svg, settings, subjectRect, {
+          mapBounds,
+          includeNearbyLabels: true
+        });
       })
       .on("end", function () {
+        delete state.dragStartX;
+        delete state.dragStartY;
+        delete state.axis;
+        clearDistanceMarkers();
         d3.select(this).classed("is-dragging", false);
         setStatusMessage(`${label} moved.`, "ok");
       }));
   }
 
-  function drawLegend(svg, settings) {
-    const headingSize = Math.max(settings.labelSize, Math.round(settings.labelSize * 1.08));
-    const headingSizeRender = Math.max(settings.labelSizeRender, Math.round(settings.labelSizeRender * 1.08));
-    const rowHeight = Math.max(28, Math.round(settings.labelSize * 2.1));
-    const headingHeight = Math.max(30, Math.round(headingSize * 1.8));
-    const verticalPadding = Math.max(14, Math.round(settings.labelSize * 1.1));
-    const longestLabelLength = Math.max(6, ...categorySettings.map(category => category.label.length));
-    const dimensions = {
-      width: Math.max(280, Math.min(430, Math.round(longestLabelLength * settings.labelSize * 0.62 + 120))),
-      height: verticalPadding * 2 + headingHeight + categorySettings.length * rowHeight
+  function positionBoxControls(group, dimensions) {
+    group.select(".box-hide-control")
+      .attr("transform", `translate(${Math.max(8, dimensions.width - 25)},8)`);
+    group.select(".box-resize-control")
+      .attr("transform", `translate(${Math.max(0, dimensions.width - 16)},${Math.max(0, dimensions.height - 16)})`);
+  }
+
+  function attachBoxControls(group, key, position, dimensions, constraints, settings, label, mapBounds, visibilityInput) {
+    const hide = group.append("g")
+      .attr("class", "box-controls box-hide-control")
+      .attr("role", "button")
+      .attr("aria-label", `Hide ${label}`)
+      .on("click", event => {
+        event.stopPropagation();
+        if (visibilityInput) {
+          setMapFurnitureVisibility(key, false, visibilityInput, label);
+        }
+      });
+
+    hide.append("rect")
+      .attr("width", 17)
+      .attr("height", 17)
+      .attr("rx", 3);
+    hide.append("line")
+      .attr("x1", 5)
+      .attr("y1", 5)
+      .attr("x2", 12)
+      .attr("y2", 12);
+    hide.append("line")
+      .attr("x1", 12)
+      .attr("y1", 5)
+      .attr("x2", 5)
+      .attr("y2", 12);
+
+    const resizeState = {
+      x: position.x,
+      y: position.y,
+      width: dimensions.width,
+      height: dimensions.height
     };
-    const position = getBoxPosition("legend", { x: 40, y: settings.height - 150 }, dimensions, settings);
+    const resize = group.append("g")
+      .attr("class", "box-controls box-resize-control")
+      .call(d3.drag()
+        .on("start", function (event) {
+          if (event.sourceEvent) event.sourceEvent.stopPropagation();
+          d3.select(this).classed("is-dragging", true);
+          group.classed("is-resizing", true);
+        })
+        .on("drag", function (event) {
+          if (event.sourceEvent) event.sourceEvent.stopPropagation();
+          const nextDimensions = clampBoxDimensions({
+            width: resizeState.width + event.dx,
+            height: resizeState.height + event.dy
+          }, constraints, settings);
+          const nextPosition = clampBoxPosition({ x: resizeState.x, y: resizeState.y }, nextDimensions, settings);
+          resizeState.x = nextPosition.x;
+          resizeState.y = nextPosition.y;
+          resizeState.width = nextDimensions.width;
+          resizeState.height = nextDimensions.height;
+          saveManualBoxState(key, nextPosition, nextDimensions);
+          group.attr("transform", translatePosition(nextPosition));
+          group.select(".legend-box, .callout-box")
+            .attr("width", nextDimensions.width)
+            .attr("height", nextDimensions.height);
+          positionBoxControls(group, nextDimensions);
+          const subjectRect = rectFromPosition(nextPosition, nextDimensions);
+          drawDistanceMarkers(els.svg, settings, subjectRect, {
+            mapBounds,
+            includeNearbyLabels: true
+          });
+        })
+        .on("end", function () {
+          d3.select(this).classed("is-dragging", false);
+          group.classed("is-resizing", false);
+          clearDistanceMarkers();
+          scheduleRender();
+          setStatusMessage(`${label} resized.`, "ok");
+        }));
+
+    resize.append("rect")
+      .attr("width", 16)
+      .attr("height", 16)
+      .attr("rx", 3);
+    resize.append("path")
+      .attr("d", "M5,12 L12,5 M9,12 L12,9");
+
+    positionBoxControls(group, dimensions);
+  }
+
+  function drawLegend(svg, settings, mapBounds) {
+    const {
+      dimensions,
+      position,
+      constraints,
+      headingSizeRender,
+      rowHeight,
+      headingHeight,
+      verticalPadding
+    } = getLegendBoxLayout(settings);
     const group = svg.append("g")
       .attr("class", "legend-layer movable-map-box")
       .attr("transform", translatePosition(position));
@@ -2354,12 +4450,11 @@
       .attr("x", 0)
       .attr("y", 0)
       .attr("width", dimensions.width)
-      .attr("height", dimensions.height)
-      .attr("rx", 8);
+      .attr("height", dimensions.height);
 
     group.append("text")
       .attr("class", "box-heading legend-heading")
-      .attr("x", 30)
+      .attr("x", 24)
       .attr("y", verticalPadding + 4)
       .attr("font-size", headingSizeRender)
       .attr("font-family", settings.fontFamily)
@@ -2369,10 +4464,10 @@
     categorySettings.forEach((category, index) => {
       const itemY = verticalPadding + headingHeight + index * rowHeight + rowHeight / 2;
       const legendMarkerSize = Math.max(8, Math.min(18, getCategoryMarkerSize(category, settings)));
-      drawMarkerSymbol(group, category, 54, itemY, legendMarkerSize);
+      drawMarkerSymbol(group, category, 46, itemY, legendMarkerSize);
       group.append("text")
         .attr("class", "legend-text")
-        .attr("x", 86)
+        .attr("x", 72)
         .attr("y", itemY)
         .attr("font-size", settings.labelSizeRender)
         .attr("font-family", settings.fontFamily)
@@ -2381,30 +4476,23 @@
         .text(category.label);
     });
 
-    attachBoxDragging(group, "legend", position, dimensions, settings, "Legend");
+    attachBoxDragging(group, "legend", position, dimensions, settings, "Legend", mapBounds);
+    attachBoxControls(group, "legend", position, dimensions, constraints, settings, "Legend", mapBounds, els.showLegendInput);
   }
 
   function drawCallouts(svg, calloutRows, settings, mapBounds) {
-    const subtitleText = "Canada-wide, not shown on map";
-    const nameSize = settings.labelSizeRender;
-    const subtitleSizePt = Math.max(10, Math.round(settings.labelSize * 0.85));
-    const subtitleSize = Math.max(9, Math.round(nameSize * 0.85));
-    const lineH = Math.max(20, Math.round(settings.labelSize * 1.35));
-    const subLineH = Math.max(15, Math.round(subtitleSizePt * 1.3));
-    const rowHeight = lineH + subLineH + Math.max(6, Math.round(settings.labelSize * 0.3));
-    const padV = Math.max(12, Math.round(settings.labelSize * 0.75));
-    const longestNameLen = Math.max(0, ...calloutRows.map(row => String(row.name || "").length));
-    const nameWidth = longestNameLen * settings.labelSize * 0.58 + 80;
-    const subWidth = subtitleText.length * subtitleSizePt * 0.56 + 80;
-    const dimensions = {
-      width: Math.max(200, Math.min(settings.width - 40, Math.round(Math.max(nameWidth, subWidth)))),
-      height: padV * 2 + calloutRows.length * rowHeight
-    };
-    const fallback = {
-      x: Math.max(30, settings.width - dimensions.width - 30),
-      y: 30
-    };
-    const position = getBoxPosition("callouts", fallback, dimensions, settings);
+    const {
+      dimensions,
+      position,
+      constraints,
+      subtitleText,
+      nameSize,
+      subtitleSize,
+      lineH,
+      textX,
+      markerX,
+      rows
+    } = getCalloutBoxLayout(calloutRows, settings);
     const group = svg.append("g")
       .attr("class", "callout-layer movable-map-box")
       .attr("transform", translatePosition(position));
@@ -2414,37 +4502,42 @@
       .attr("x", 0)
       .attr("y", 0)
       .attr("width", dimensions.width)
-      .attr("height", dimensions.height)
-      .attr("rx", 8);
+      .attr("height", dimensions.height);
 
-    calloutRows.forEach((row, i) => {
-      const rowY = padV + i * rowHeight;
+    rows.forEach(layout => {
+      const { row, rowY, nameLines, rowHeight, subtitleY } = layout;
       const category = getCategory(row.type);
       const markerSize = Math.max(7, Math.min(14, getCategoryMarkerSize(category, settings)));
-      drawMarkerSymbol(group, category, 26, rowY + (lineH + subLineH) / 2, markerSize);
+      drawMarkerSymbol(group, category, markerX, rowY + rowHeight / 2, markerSize);
 
       const nameEl = group.append("text")
         .attr("class", "callout-text")
-        .attr("x", 52)
+        .attr("x", textX)
         .attr("y", rowY)
         .attr("font-size", nameSize)
         .attr("font-family", settings.fontFamily)
-        .attr("dominant-baseline", "hanging")
-        .text(row.name);
+        .attr("dominant-baseline", "hanging");
+      nameLines.forEach((line, index) => {
+        nameEl.append("tspan")
+          .attr("x", textX)
+          .attr("dy", index === 0 ? 0 : lineH)
+          .text(line);
+      });
       const footnote = getRenderableFootnote(row.footnote);
       if (footnote) appendSuperscript(nameEl, footnote, nameSize);
 
       group.append("text")
         .attr("class", "callout-subtitle")
-        .attr("x", 52)
-        .attr("y", rowY + lineH)
+        .attr("x", textX)
+        .attr("y", subtitleY)
         .attr("font-size", subtitleSize)
         .attr("font-family", settings.fontFamily)
         .attr("dominant-baseline", "hanging")
         .text(subtitleText);
     });
 
-    attachBoxDragging(group, "callouts", position, dimensions, settings, "Callouts");
+    attachBoxDragging(group, "callouts", position, dimensions, settings, "Callouts", mapBounds);
+    attachBoxControls(group, "callouts", position, dimensions, constraints, settings, "No-coordinate callouts", mapBounds, els.showCalloutsInput);
   }
 
   function drawMarkerSymbol(svg, category, cx, cy, size) {
@@ -2564,7 +4657,7 @@
   }
 
   function quoteFontFamily(fontFamily) {
-    return String(fontFamily || "Lato")
+    return normalizeFontFamily(fontFamily)
       .split(",")
       .map(font => {
         const trimmed = font.trim();
@@ -2577,8 +4670,8 @@
     const mapBackground = getCssVar("--map-background", "#ffffff");
     const mapBoundary = getCssVar("--map-boundary", "#ffffff");
     const mapBoxBorder = getCssVar("--map-box-border", "#333333");
-    const ink = getCssVar("--ink", "#222222");
-    const muted = getCssVar("--muted", "#666666");
+    const ink = getCssVar("--map-ink", getCssVar("--ink", "#222222"));
+    const muted = getCssVar("--map-muted", getCssVar("--muted", "#666666"));
     const leader = getCssVar("--leader", "#333333");
     const fontFamily = quoteFontFamily(getSettings().fontFamily);
 
@@ -2589,7 +4682,7 @@
       .marker { stroke-width: 2.2; }
       .leader-casing { fill: none; stroke: ${mapBackground}; stroke-linecap: round; stroke-linejoin: round; }
       .leader-line { fill: none; stroke: ${leader}; stroke-linecap: round; stroke-linejoin: round; }
-      .map-label-background { fill: #ffffff; stroke: none; }
+      .map-label-background { fill: none; stroke: none; }
       .map-label { font-family: ${fontFamily}; font-weight: 700; fill: ${ink}; }
       .label-footnote { font-weight: 700; }
       .callout-box, .legend-box { fill: ${mapBackground}; stroke: ${mapBoxBorder}; stroke-width: 1.5; }
@@ -2615,6 +4708,8 @@
     } else {
       clone.setAttribute("data-output", "web");
     }
+
+    clone.querySelectorAll(".map-scale-controls, .distance-markers, .box-controls").forEach(node => node.remove());
 
     const style = document.createElementNS("http://www.w3.org/2000/svg", "style");
     style.textContent = getExportCss();
@@ -2708,11 +4803,12 @@
       name: row.name,
       footnote: row.footnote,
       type: getCategoryLabel(row.type),
+      priority: row.priority || "",
       lon: row.lon,
       lat: row.lat,
       hideLine: row.hideLine ? "yes" : ""
     }));
-    const columns = ["name", "footnote", "type", "lon", "lat", "hideLine"];
+    const columns = ["name", "footnote", "type", "priority", "lon", "lat", "hideLine"];
     const csvBody = window.Papa ? Papa.unparse(exportRows, { columns }) : unparseCsvRows(exportRows, columns);
     const csv = "\ufeff" + csvBody;
     download("custom-map-data.csv", csv, "text/csv;charset=utf-8");
@@ -2741,6 +4837,7 @@
         name: row.name,
         footnote: row.footnote,
         type: cleanType(row.type),
+        priority: row.priority || 0,
         lon: row.lon,
         lat: row.lat,
         hideLine: row.hideLine
@@ -2766,8 +4863,9 @@
 
         currentBoundary = Object.prototype.hasOwnProperty.call(boundarySources, project.boundary) ? project.boundary : "canada";
         els.boundaryInput.value = currentBoundary;
-        applyMapStylePreset(project.mapStyle || "goc-green", { applyMapColours: false, render: false });
+        applyMapStylePreset(project.mapStyle || defaultMapStylePreset, { applyMapColours: false, render: false });
         applySettings(project.settings || {});
+        if (project.settings) saveLayoutPreferences();
         applyCategorySettings(project.categories || []);
         regionVisibility = project.regionVisibility || {};
         regionFills = project.regionFills || {};
@@ -2897,7 +4995,7 @@
       tr.querySelector(".name-input").focus();
       window.setTimeout(() => tr.classList.remove("is-new"), 120);
     });
-    on(els.clearRowsBtn, "click", () => setRows([]));
+    on(els.clearRowsBtn, "click", confirmClearProjectRows);
     on(els.deleteSelectedBtn, "click", () => {
       const selectedRows = Array.from(els.tableBody.querySelectorAll("tr"))
         .filter(tr => tr.querySelector(".row-select").checked);
@@ -2915,7 +5013,6 @@
         render();
       }, 260);
     });
-    on(els.renderBtn, "click", autoPlaceLabels);
     on(els.downloadCsvBtn, "click", exportCsv);
     on(els.saveProjectBtn, "click", saveProject);
     on(els.exportSvgBtn, "click", exportSvg);
@@ -2944,18 +5041,25 @@
     document.addEventListener("click", event => {
       const resetButton = event.target.closest(".reset-default-btn");
       if (resetButton) resetLayoutInputToDefault(resetButton);
+      if (mapScaleControlsVisible && els.mapHost && !els.mapHost.contains(event.target)) {
+        hideMapScaleControls();
+      }
     });
     [
       els.bookSizeInput,
       els.imageSizeInput,
       els.labelSizeInput,
+      els.mapScaleInput,
       els.markerSizeInput,
       els.lineWidthInput,
       els.labelCharsInput,
       els.fontFamilyInput,
       els.showLegendInput,
       els.showCalloutsInput,
+      els.compactFurnitureInput,
       els.showLineCasingInput,
+      els.routeDenseLeadersInput,
+      els.showDistanceMarkersInput,
       els.lockMarkerCoordinatesInput
     ].forEach(el => on(el, "change", handleLayoutSettingsChange));
     on(els.addCategoryBtn, "click", addCategory);
@@ -2965,12 +5069,13 @@
       const removeButton = event.target.closest(".remove-category-btn");
       if (removeButton) removeCategory(removeButton.dataset.categoryId);
 
-      const moveButton = event.target.closest(".move-category-btn");
-      if (moveButton) moveCategory(moveButton.dataset.categoryId, moveButton.dataset.direction);
-
       const toggleButton = event.target.closest(".toggle-category-btn");
       if (toggleButton) toggleCategory(toggleButton.dataset.categoryId);
     });
+    on(els.categoryList, "dragstart", handleCategoryDragStart);
+    on(els.categoryList, "dragover", handleCategoryDragOver);
+    on(els.categoryList, "drop", handleCategoryDrop);
+    on(els.categoryList, "dragend", handleCategoryDragEnd);
     on(els.regionTableBody, "change", event => {
       if (event.target.classList.contains("region-table-included-input")) {
         regionVisibility[event.target.dataset.regionId] = event.target.checked;
@@ -3130,7 +5235,9 @@
     renderRibbonIcons();
     initEvents();
     els.boundaryInput.value = currentBoundary;
-    renderImageSizeOptions();
+    renderBookSizeOptions();
+    renderFontOptions();
+    if (!applySavedLayoutPreferences()) renderImageSizeOptions();
     renderRegionPresetOptions();
     renderMapStyleOptions();
     renderCategoryEditors();
@@ -3138,6 +5245,40 @@
     await loadGeo();
     render();
     switchDataTable(getSavedDataTable());
+  }
+
+  function createTestApi() {
+    return {
+      rectsOverlap,
+      rectOverlapArea,
+      segmentsCross,
+      pointInRect,
+      segmentIntersectsRect,
+      lineEnd,
+      makeLabelPlacement,
+      createCandidateForSide,
+      createLabelCandidates,
+      createPerimeterCandidateMap,
+      createPerimeterCapacity,
+      assessPerimeterFeasibility,
+      scoreCandidate,
+      countSideOrderInversions,
+      createOrderPreservingVerticalSlots,
+      createOrderPreservingHorizontalSlots,
+      optimizeOrderedSideBands,
+      applyManualLabelPositions,
+      setManualLabelPositions(value) {
+        manualLabelPositions = { ...(value || {}) };
+      },
+      getManualLabelPositions() {
+        return { ...manualLabelPositions };
+      }
+    };
+  }
+
+  if (window.PLOTYPUS_TEST_MODE) {
+    window.PLOTYPUS_TEST_API = createTestApi();
+    return;
   }
 
   init();
